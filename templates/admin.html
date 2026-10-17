@@ -3,71 +3,74 @@
 
 <div class="row">
     <div>
-        <h1>{{ 'የአስተዳዳሪ ዳሽቦርድ' if lang=='am' else 'Admin dashboard' }}</h1>
+        <h1>Admin dashboard</h1>
         <p class="muted">Month: {{ month }}</p>
     </div>
     <form method="get">
         <label>Month</label>
         <input type="month" name="month" value="{{ month }}">
-        <button>View</button>
+        <button type="submit">View</button>
     </form>
 </div>
 
-<div class="grid">
-    <div class="stat">
-        <small>Employees</small>
-        <strong>{{ employees }}</strong>
+<div class="grid" style="display: flex; gap: 15px; margin: 20px 0;">
+    <div class="stat" style="background: #fff; padding: 15px; border-radius: 6px; flex: 1; border: 1px solid #ddd;">
+        <small>Employees</small><br>
+        <strong style="font-size: 20px;">{{ employees }}</strong>
     </div>
-    <div class="stat">
-        <small>Released allocation</small>
-        <strong>{{ "%.2f"|format(allocated) }}</strong>
+    <div class="stat" style="background: #fff; padding: 15px; border-radius: 6px; flex: 1; border: 1px solid #ddd;">
+        <small>Released allocation</small><br>
+        <strong style="font-size: 20px;">{{ "%.2f"|format(allocated) }}</strong>
     </div>
-    <div class="stat">
-        <small>Spent</small>
-        <strong>{{ "%.2f"|format(spent) }}</strong>
+    <div class="stat" style="background: #fff; padding: 15px; border-radius: 6px; flex: 1; border: 1px solid #ddd;">
+        <small>Spent</small><br>
+        <strong style="font-size: 20px;">{{ "%.2f"|format(spent) }}</strong>
     </div>
-    <div class="stat">
-        <small>Merchant collected</small>
-        <strong>{{ "%.2f"|format(collected) }}</strong>
+    <div class="stat" style="background: #fff; padding: 15px; border-radius: 6px; flex: 1; border: 1px solid #ddd;">
+        <small>Merchant collected</small><br>
+        <strong style="font-size: 20px;">{{ "%.2f"|format(collected) }}</strong>
     </div>
 </div>
 
-<div class="panel">
+<div class="panel" style="background: #fff; padding: 20px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #ddd;">
     <h2>Quick actions</h2>
-    <div class="actions">
-        <a class="btn" href="{{ url_for('add_employee') }}">+ Add employee</a>
-        <a class="btn btn-success" href="{{ url_for('create_merchant') }}">+ Add merchant</a>
-        <a class="btn" href="{{ url_for('upload_employees') }}">Bulk Excel upload</a>
-        <a class="btn" href="{{ url_for('allocations', month=month) }}">Monthly coupons</a>
-        <a class="btn" href="{{ url_for('qrlist') }}">Export QR list</a>
-        <a class="btn" href="{{ url_for('reports_csv', month=month) }}">Export transactions</a>
+    <div class="actions" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+        <a class="btn" href="{{ url_for('add_employee') }}" style="padding: 8px 15px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">+ Add employee</a>
+        <a class="btn" href="{{ url_for('create_merchant') }}" style="padding: 8px 15px; background: #28a745; color: white; text-decoration: none; border-radius: 4px;">+ Add merchant</a>
+        <a class="btn" href="{{ url_for('upload_employees') }}" style="padding: 8px 15px; background: #17a2b8; color: white; text-decoration: none; border-radius: 4px;">Bulk Excel upload</a>
+        <a class="btn" href="{{ url_for('qrlist') }}" style="padding: 8px 15px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px;">Export QR list</a>
+        <a class="btn" href="{{ url_for('reports_csv') }}" style="padding: 8px 15px; background: #ffc107; color: black; text-decoration: none; border-radius: 4px;">Export transactions</a>
     </div>
 </div>
 
-<div class="panel">
+<div class="panel" style="background: #fff; padding: 20px; border-radius: 6px; border: 1px solid #ddd;">
     <h2>Recent payments</h2>
     <div class="table-wrap">
-        <table>
-            <tr>
-                <th>UTC date</th>
-                <th>Reference</th>
-                <th>Employee</th>
-                <th>Sector</th>
-                <th>Amount</th>
-            </tr>
-            {% for t in transactions %}
-            <tr>
-                <td>{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                <td>{{ t.reference }}</td>
-                <td>{{ t.employee.employee_id }} — {{ t.employee.full_name }}</td>
-                <td>{{ t.employee.sector }}</td>
-                <td>{{ "%.2f"|format(t.amount) }}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="5">No payments yet.</td>
-            </tr>
-            {% endfor %}
+        <table style="width: 100%; border-collapse: collapse; text-align: left; margin-top: 15px;">
+            <thead>
+                <tr style="border-bottom: 2px solid #ddd;">
+                    <th style="padding: 8px;">UTC date</th>
+                    <th style="padding: 8px;">Reference</th>
+                    <th style="padding: 8px;">Employee</th>
+                    <th style="padding: 8px;">Sector</th>
+                    <th style="padding: 8px;">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in transactions %}
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 8px;">{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td style="padding: 8px;">{{ t.reference }}</td>
+                    <td style="padding: 8px;">{{ t.employee.employee_id }} — {{ t.employee.full_name }}</td>
+                    <td style="padding: 8px;">{{ t.employee.sector }}</td>
+                    <td style="padding: 8px;">{{ "%.2f"|format(t.amount) }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="padding: 15px; text-align: center; color: #777;">No payments yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
     </div>
 </div>

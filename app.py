@@ -198,48 +198,6 @@ def employees():
     all_employees = Employee.query.all()
     return render_template('employees.html', employees=all_employees)
 
-@app.route('/allocations')
-def allocations():
-    if session.get('role') not in ['admin', 'superadmin']:
-        flash('Unauthorized access.', 'danger')
-        return redirect(url_for('login'))
-    flash('Monthly coupons module active.', 'info')
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/reports_csv')
-def reports_csv():
-    if session.get('role') not in ['admin', 'superadmin']:
-        flash('Unauthorized access.', 'danger')
-        return redirect(url_for('login'))
-    
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['ID', 'Reference', 'Amount', 'Date'])
-    for t in Transaction.query.all():
-        writer.writerow([t.id, t.reference, t.amount, t.created_at])
-    
-    byte_output = io.BytesIO(output.getvalue().encode('utf-8'))
-    output.close()
-    return send_file(byte_output, mimetype='text/csv', download_name='transactions_report.csv', as_attachment=True)
-
-@app.route('/qrlist')
-def qrlist():
-    if session.get('role') not in ['admin', 'superadmin']:
-        flash('Unauthorized access.', 'danger')
-        return redirect(url_for('login'))
-        
-    all_employees = Employee.query.all()
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['employee_id', 'full_name', 'sector', 'qr_token'])
-    for emp in all_employees:
-        writer.writerow([emp.employee_id, emp.full_name, emp.sector, emp.qr_token])
-    
-    byte_output = io.BytesIO(output.getvalue().encode('utf-8'))
-    output.close()
-    
-    return send_file(byte_output, mimetype='text/csv', download_name='employee_qr_list.csv', as_attachment=True)
-
 @app.route('/upload_employees', methods=['GET', 'POST'])
 def upload_employees():
     if session.get('role') not in ['admin', 'superadmin']:
@@ -267,6 +225,39 @@ def upload_employees():
             return redirect(url_for('employees'))
             
     return render_template('upload.html')
+
+@app.route('/qrlist')
+def qrlist():
+    if session.get('role') not in ['admin', 'superadmin']:
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('login'))
+        
+    all_employees = Employee.query.all()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['employee_id', 'full_name', 'sector', 'qr_token'])
+    for emp in all_employees:
+        writer.writerow([emp.employee_id, emp.full_name, emp.sector, emp.qr_token])
+    
+    byte_output = io.BytesIO(output.getvalue().encode('utf-8'))
+    output.close()
+    return send_file(byte_output, mimetype='text/csv', download_name='employee_qr_list.csv', as_attachment=True)
+
+@app.route('/reports_csv')
+def reports_csv():
+    if session.get('role') not in ['admin', 'superadmin']:
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('login'))
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'Reference', 'Amount', 'Date'])
+    for t in Transaction.query.all():
+        writer.writerow([t.id, t.reference, t.amount, t.created_at])
+    
+    byte_output = io.BytesIO(output.getvalue().encode('utf-8'))
+    output.close()
+    return send_file(byte_output, mimetype='text/csv', download_name='transactions_report.csv', as_attachment=True)
 
 @app.route('/merchant')
 def merchant_dashboard():
