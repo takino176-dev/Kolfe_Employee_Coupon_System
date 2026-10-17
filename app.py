@@ -298,3 +298,35 @@ def create_merchant():
         return redirect(url_for('admin_dashboard'))
         
     return render_template('create_merchant.html')
+@app.route('/create_merchant', methods=['GET', 'POST'])
+def create_merchant():
+    if session.get('role') not in ['admin', 'superadmin']:
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        if not username or not password:
+            flash('All fields are required.', 'danger')
+            return redirect(url_for('create_merchant'))
+
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            flash('Username already exists.', 'danger')
+            return redirect(url_for('create_merchant'))
+            
+        hashed_password = generate_password_hash(password)
+        new_merchant = User(
+            username=username,
+            password=hashed_password,
+            role='merchant'
+        )
+        db.session.add(new_merchant)
+        db.session.commit()
+        
+        flash('Merchant account created successfully!', 'success')
+        return redirect(url_for('admin_dashboard'))
+        
+    return render_template('create_merchant.html')
