@@ -248,3 +248,17 @@ def forbidden(e):return render_template("message.html",title="Access denied",mes
 def missing(e):return render_template("message.html",title="Not found",message="Page not found."),404
 with app.app_context():db.create_all()
 if __name__=="__main__":app.run(host="0.0.0.0",port=int(os.environ.get("PORT","5000")))
+
+
+@app.route('/delete_employee/<int:employee_id>', methods=['POST'])
+def delete_employee(employee_id):
+    if session.get('role') != 'admin':
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('login'))
+    
+    employee = Employee.query.get_or_404(employee_id)
+    db.session.delete(employee)
+    db.session.commit()
+    
+    flash(f'Employee {employee.full_name} deleted successfully.', 'success')
+    return redirect(url_for('employees'))

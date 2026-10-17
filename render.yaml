@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: kolfe-employee-coupon
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 2 --threads 4 --timeout 120
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kolfe-coupon-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+databases:
+  - name: kolfe-coupon-db
+    plan: basic-256mb
