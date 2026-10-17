@@ -262,3 +262,32 @@ def delete_employee(employee_id):
     
     flash(f'Employee {employee.full_name} deleted successfully.', 'success')
     return redirect(url_for('employees'))
+
+
+
+
+@app.route('/create_merchant', methods=['GET', 'POST'])
+def create_merchant():
+    if session.get('role') != 'admin':
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        merchant_name = request.form.get('merchant_name')
+        
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            flash('Username already exists.', 'danger')
+            return redirect(url_for('create_merchant'))
+            
+        hashed_password = generate_password_hash(password)
+        new_merchant = User(username=username, password=hashed_password, role='merchant', merchant_name=merchant_name)
+        db.session.add(new_merchant)
+        db.session.commit()
+        
+        flash('Merchant account created successfully!', 'success')
+        return redirect(url_for('admin_dashboard'))
+        
+    return render_template('create_merchant.html')
