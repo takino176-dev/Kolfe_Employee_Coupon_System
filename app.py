@@ -1,11 +1,11 @@
 import os
 import secrets
-from datetime import datetime
+import csv
 import io
+from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-import pandas as pd
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'super-secret-key-kolfe')
@@ -107,7 +107,6 @@ def admin_dashboard():
     month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
     employees_count = Employee.query.count()
     transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
-    
     total_spent = sum(t.amount for t in transactions)
     
     return render_template('admin.html', 
@@ -206,19 +205,17 @@ def qrlist():
         return redirect(url_for('login'))
         
     all_employees = Employee.query.all()
-    data = [{
-        'employee_id': emp.employee_id,
-        'full_name': emp.full_name,
-        'sector': emp.sector,
-        'qr_token': emp.qr_token
-    } for emp in all_employees]
     
-    df = pd.DataFrame(data)
-    output = io.BytesIO()
-    df.to_csv(output, index=False)
-    output.seek(0)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['employee_id', 'full_name', 'sector', 'qr_token'])
+    for emp in all_employees:
+        writer.writerow([emp.employee_id, emp.full_name, emp.sector, emp.qr_token])
     
-    return send_file(output, mimetype='text/csv', download_name='employee_qr_list.csv', as_attachment=True)
+    byte_output = io.BytesIO(output.getvalue().encode('utf-8'))
+    output.close()
+    
+    return send_file(byte_output, mimetype='text/csv', download_name='employee_qr_list.csv', as_attachment=True)
 
 @app.route('/upload_employees', methods=['GET', 'POST'])
 def upload_employees():
@@ -229,15 +226,16 @@ def upload_employees():
     if request.method == 'POST':
         file = request.files.get('file')
         if file:
-            df = pd.read_excel(file)
-            for _, row in df.iterrows():
-                emp_id = str(row.get('employee_id'))
-                if not Employee.query.filter_by(employee_id=emp_id).first():
+            stream = io.TextIOWrapper(file.stream, encoding='utf-8')
+            reader = csv.DictReader(stream)
+            for row in reader:
+                emp_id = row.get('employee_id')
+                if emp_id and not Employee.query.filter_by(employee_id=emp_id).first():
                     qr_token = secrets.token_urlsafe(16)
                     emp = Employee(
                         employee_id=emp_id,
-                        full_name=str(row.get('full_name')),
-                        sector=str(row.get('sector')),
+                        full_name=row.get('full_name', ''),
+                        sector=row.get('sector', ''),
                         qr_token=qr_token
                     )
                     db.session.add(emp)
