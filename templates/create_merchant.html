@@ -1,13 +1,30 @@
-{% extends "base.html" %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create Merchant Account</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6f9; padding: 40px; margin: 0; }
+        .card { max-width: 450px; background: #fff; padding: 30px; margin: auto; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { margin-bottom: 20px; color: #333; text-align: center; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #444; }
+        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; }
+        button { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        button:hover { background: #218838; }
+        .back-link { display: block; margin-top: 20px; text-align: center; text-decoration: none; color: #007bff; font-size: 14px; }
+    </style>
+</head>
+<body>
 
-<div class="panel" style="max-width: 450px; margin: 30px auto;">
+<div class="card">
     <h2>Create Merchant Account</h2>
-
+    
+    <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
-          <div style="padding: 10px; margin-bottom: 15px; background: {% if category == 'danger' %}#f8d7da{% else %}#d4edda{% endif %}; color: {% if category == 'danger' %}#721c24{% else %}#155724{% endif %}; border-radius: 4px;">
+          <div style="padding: 12px; margin-bottom: 15px; background: {% if category == 'danger' %}#f8d7da{% else %}#d4edda{% endif %}; color: {% if category == 'danger' %}#721c24{% else %}#155724{% endif %}; border-radius: 4px; font-size: 14px;">
             {{ message }}
           </div>
         {% endfor %}
@@ -15,20 +32,19 @@
     {% endwith %}
 
     <form method="POST">
-        <div style="margin-bottom: 15px;">
-            <label style="display:block; margin-bottom: 5px; font-weight: bold;">Merchant Username</label>
-            <input type="text" name="username" class="input" required style="width:100%; padding:8px; box-sizing: border-box;">
+        <div class="form-group">
+            <label>Merchant Username:</label>
+            <input type="text" name="username" required>
         </div>
-        <div style="margin-bottom: 20px;">
-            <label style="display:block; margin-bottom: 5px; font-weight: bold;">Password</label>
-            <input type="password" name="password" class="input" required style="width:100%; padding:8px; box-sizing: border-box;">
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label>Password:</label>
+            <input type="password" name="password" required>
         </div>
-        <button type="submit" class="btn btn-success" style="width:100%;">Create Merchant</button>
+        <button type="submit">Create Merchant</button>
     </form>
-
-    <div style="text-align: center; margin-top: 15px;">
-        <a href="{{ url_for('admin_dashboard') }}">Back to Admin Dashboard</a>
-    </div>
+    
+    <a href="{{ url_for('admin_dashboard') }}" class="back-link">← Back to Admin Dashboard</a>
 </div>
 
-{% endblock %}
+</body>
+</html>
