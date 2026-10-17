@@ -1,1 +1,21 @@
-{% extends "base.html" %}{% block content %}<div class="panel" style="max-width:650px"><h1>Add employee</h1><p>Creates permanent QR and temporary password (shown once).</p><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Employee ID</label><input name="employee_id" required><label>Full name</label><input name="full_name" required><label>Sector</label><input name="sector"><label>Username</label><input name="username" required><button>Create employee</button></form></div>{% endblock %}
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width: 500px; background: #fff; padding: 30px; margin: 20px auto; border-radius: 8px; border: 1px solid #ddd;">
+    <h2>Add New Employee</h2>
+    <form method="POST" style="margin-top: 20px;">
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Employee ID</label>
+            <input type="text" name="employee_id" required style="width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Full Name</label>
+            <input type="text" name="full_name" required style="width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Sector / Department</label>
+            <input type="text" name="sector" required style="width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+        <button type="submit" style="width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer;">Save Employee</button>
+    </form>
+</div>
+{% endblock %}
