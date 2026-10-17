@@ -1,30 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Create Merchant Account</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f9; padding: 40px; }
-        .card { max-width: 400px; background: #fff; padding: 30px; margin: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2 { margin-bottom: 20px; color: #333; }
-        .form-group { margin-bottom: 15px; text-align: left; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .back-link { display: block; margin-top: 15px; text-align: center; text-decoration: none; color: #007bff; }
-    </style>
-</head>
-<body>
+{% extends "base.html" %}
+{% block content %}
 
-<div class="card">
-    <h2>Create Merchant Account</h2>
-    
+<div style="max-width: 450px; margin: 40px auto; background: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+    <h2 style="margin-bottom: 20px; color: #333; text-align: center;">Create Merchant Account</h2>
+
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
-          <div style="padding: 10px; margin-bottom: 15px; background: {% if category == 'danger' %}#f8d7da{% else %}#d4edda{% endif %}; color: {% if category == 'danger' %}#721c24{% else %}#155724{% endif %}; border-radius: 4px;">
+          <div style="padding: 12px; margin-bottom: 15px; background: {% if category == 'danger' %}#f8d7da{% else %}#d4edda{% endif %}; color: {% if category == 'danger' %}#721c24{% else %}#155724{% endif %}; border-radius: 4px; font-size: 14px;">
             {{ message }}
           </div>
         {% endfor %}
@@ -32,129 +16,29 @@
     {% endwith %}
 
     <form method="POST">
-        <div class="form-group">
-            <label>Merchant / Shop Name:</label>
-            <input type="text" name="merchant_name" required>
+        <div style="margin-bottom: 15px; text-align: left;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #444;">Merchant / Shop Name:</label>
+            <input type="text" name="merchant_name" required style="width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 15px;">
         </div>
-        <div class="form-group">
-            <label>Username:</label>
-            <input type="text" name="username" required>
+
+        <div style="margin-bottom: 15px; text-align: left;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #444;">Username:</label>
+            <input type="text" name="username" required style="width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 15px;">
         </div>
-        <div class="form-group">
-            <label>Password:</label>
-            <input type="password" name="password" required>
+
+        <div style="margin-bottom: 20px; text-align: left;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #444;">Password:</label>
+            <input type="password" name="password" required style="width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 15px;">
         </div>
-        <button type="submit">Create Merchant</button>
+
+        <button type="submit" style="width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer;">
+            Create Merchant
+        </button>
     </form>
-    
-    <a href="{{ url_for('admin_dashboard') }}" class="back-link">Back to Admin Dashboard</a>
+
+    <div style="text-align: center; margin-top: 20px;">
+        <a href="{{ url_for('admin_dashboard') }}" style="text-decoration: none; color: #007bff; font-size: 14px;">← Back to Admin Dashboard</a>
+    </div>
 </div>
 
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Create Merchant Account</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f9; padding: 40px; }
-        .card { max-width: 400px; background: #fff; padding: 30px; margin: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2 { margin-bottom: 20px; color: #333; }
-        .form-group { margin-bottom: 15px; text-align: left; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .back-link { display: block; margin-top: 15px; text-align: center; text-decoration: none; color: #007bff; }
-    </style>
-</head>
-<body>
-
-<div class="card">
-    <h2>Create Merchant Account</h2>
-    
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div style="padding: 10px; margin-bottom: 15px; background: {% if category == 'danger' %}#f8d7da{% else %}#d4edda{% endif %}; color: {% if category == 'danger' %}#721c24{% else %}#155724{% endif %}; border-radius: 4px;">
-            {{ message }}
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-
-    <form method="POST">
-        <div class="form-group">
-            <label>Merchant / Shop Name:</label>
-            <input type="text" name="merchant_name" required>
-        </div>
-        <div class="form-group">
-            <label>Username:</label>
-            <input type="text" name="username" required>
-        </div>
-        <div class="form-group">
-            <label>Password:</label>
-            <input type="password" name="password" required>
-        </div>
-        <button type="submit">Create Merchant</button>
-    </form>
-    
-    <a href="{{ url_for('admin_dashboard') }}" class="back-link">Back to Admin Dashboard</a>
-</div>
-
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Create Merchant Account</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f9; padding: 40px; }
-        .card { max-width: 400px; background: #fff; padding: 30px; margin: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h2 { margin-bottom: 20px; color: #333; }
-        .form-group { margin-bottom: 15px; text-align: left; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .back-link { display: block; margin-top: 15px; text-align: center; text-decoration: none; color: #007bff; }
-    </style>
-</head>
-<body>
-
-<div class="card">
-    <h2>Create Merchant Account</h2>
-    
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div style="padding: 10px; margin-bottom: 15px; background: {% if category == 'danger' %}#f8d7da{% else %}#d4edda{% endif %}; color: {% if category == 'danger' %}#721c24{% else %}#155724{% endif %}; border-radius: 4px;">
-            {{ message }}
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-
-    <form method="POST">
-        <div class="form-group">
-            <label>Merchant / Shop Name:</label>
-            <input type="text" name="merchant_name" required>
-        </div>
-        <div class="form-group">
-            <label>Username:</label>
-            <input type="text" name="username" required>
-        </div>
-        <div class="form-group">
-            <label>Password:</label>
-            <input type="password" name="password" required>
-        </div>
-        <button type="submit">Create Merchant</button>
-    </form>
-    
-    <a href="{{ url_for('admin_dashboard') }}" class="back-link">Back to Admin Dashboard</a>
-</div>
-
-</body>
-</html>
+{% endblock %}
