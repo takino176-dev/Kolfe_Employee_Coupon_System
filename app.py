@@ -268,8 +268,9 @@ def delete_employee(employee_id):
 
 @app.route('/create_merchant', methods=['GET', 'POST'])
 def create_merchant():
-    if session.get('role') != 'admin':
-        flash('Unauthorized access.', 'danger')
+    # Allow access if user is logged in
+    if 'user_id' not in session and 'role' not in session:
+        flash('Please log in first.', 'danger')
         return redirect(url_for('login'))
     
     if request.method == 'POST':
@@ -277,13 +278,19 @@ def create_merchant():
         password = request.form.get('password')
         merchant_name = request.form.get('merchant_name')
         
+        # Check if username exists
         existing_user = User.query.filter_by(username=username).first()
         if existing_user:
             flash('Username already exists.', 'danger')
             return redirect(url_for('create_merchant'))
             
         hashed_password = generate_password_hash(password)
-        new_merchant = User(username=username, password=hashed_password, role='merchant', merchant_name=merchant_name)
+        new_merchant = User(
+            username=username, 
+            password=hashed_password, 
+            role='merchant', 
+            merchant_name=merchant_name
+        )
         db.session.add(new_merchant)
         db.session.commit()
         
