@@ -5,3 +5,61 @@
     <p><strong>መለያ ቁጥር:</strong> {{ emp.employee_id }}</p>
     <p><strong>ዘርፍ:</strong> {{ emp.sector }}</p>
 </div>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Employee QR Card</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        .qr-card {
+            border: 2px dashed #333;
+            padding: 20px;
+            width: 300px;
+            text-align: center;
+            margin: 10px auto;
+            background: #fff;
+        }
+        .qr-card img {
+            width: 180px;
+            height: 180px;
+        }
+        .info {
+            margin-top: 15px;
+            text-align: left;
+            font-size: 15px;
+            line-height: 1.8;
+        }
+        /* Automatically open print dialog when page loads */
+        @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="qr-card">
+        <!-- QR Code Image -->
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ emp.qr_token }}" alt="QR Code">
+        
+        <!-- Employee Details (Only Full Name, ID, Sector) -->
+        <div class="info">
+            <p><strong>የሰራተኛው ስም:</strong> {{ emp.full_name }}</p>
+            <p><strong>መለያ ቁጥር:</strong> {{ emp.employee_id }}</p>
+            <p><strong>ዘርፍ:</strong> {{ emp.sector }}</p>
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 20px;" class="no-print">
+        <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Print Card</button>
+    </div>
+
+</body>
+</html>
