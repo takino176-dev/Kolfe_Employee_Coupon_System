@@ -17,11 +17,13 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+# ================= DATABASE MODELS =================
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
-    role = db.Column(db.String(20), nullable=False)
+    role = db.Column(db.String(20), nullable=False)  # 'admin', 'merchant', 'employee'
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -55,6 +57,8 @@ with app.app_context():
 @app.errorhandler(Exception)
 def handle_exception(e):
     return f"<h2 style='color:red; font-family:Arial;'>Application Error:</h2><pre>{str(e)}</pre>", 500
+
+# ================= AUTH & GENERAL ROUTES =================
 
 @app.route('/')
 def index():
@@ -104,6 +108,8 @@ def logout():
     flash('Logged out successfully.', 'info')
     return redirect(url_for('login'))
 
+# ================= ADMIN MANAGEMENT =================
+
 @app.route('/dashboard')
 @app.route('/admin')
 def admin_dashboard():
@@ -122,6 +128,19 @@ def admin_dashboard():
     return render_template('admin.html', month=month, employees=employees_count, 
                            allocated=total_allocated, spent=total_spent, collected=total_spent, 
                            transactions=recent_transactions)
+
+@app.route('/admin/change_password', methods=['GET', 'POST'])
+def admin_change_password():
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    if request.method == 'POST':
+        new_password = request.form.get('new_password')
+        admin = User.query.get(session.get('user_id'))
+        if admin and new_password:
+            admin.password = generate_password_hash(new_password)
+            db.session.commit()
+            flash('Admin password updated successfully!', 'success')
+            return redirect(url_for('admin_dashboard'))
+    return render_template('admin_password.html')
 
 @app.route('/employees')
 def employees():
@@ -148,6 +167,60 @@ def add_employee():
         flash('Employee added successfully!', 'success')
         return redirect(url_for('employees'))
     return render_template('employee_form.html')
+
+@app.route('/delete_employee/<int:emp_id>', methods=['POST'])
+def delete_employee(emp_id):
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    emp = Employee.query.get_or_404(emp_id)
+    if emp.user:
+        db.session.delete(emp.user)
+    CouponAllocation.query.filter_by(employee_id=emp.id).delete()
+    db.session.delete(emp)
+    db.session.commit()
+    flash('Employee and associated user account removed.', 'success')
+    return redirect(url_for('employees'))
+
+@app.route('/merchants')
+def merchants():
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    all_merchants = User.query.filter_by(role='merchant').all()
+    return render_template('merchants.html', merchants=all_merchants)
+
+@app.route('/create_merchant', methods=['GET', 'POST'])
+def create_merchant():
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if User.query.filter_by(username=username).first():
+            flash('Merchant username already exists.', 'danger')
+            return redirect(url_for('create_merchant'))
+        db.session.add(User(username=username, password=generate_password_hash(password), role='merchant'))
+        db.session.commit()
+        flash('Merchant created successfully!', 'success')
+        return redirect(url_for('merchants'))
+    return render_template('create_merchant.html')
+
+@app.route('/delete_merchant/<int:merchant_id>', methods=['POST'])
+def delete_merchant(merchant_id):
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    merchant = User.query.get_or_404(merchant_id)
+    if merchant.role == 'merchant':
+        db.session.delete(merchant)
+        db.session.commit()
+        flash('Merchant account removed successfully.', 'success')
+    return redirect(url_for('merchants'))
+
+@app.route('/reset_merchant_password/<int:merchant_id>', methods=['POST'])
+def reset_merchant_password(merchant_id):
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    merchant = User.query.get_or_404(merchant_id)
+    new_password = request.form.get('new_password')
+    if merchant and new_password:
+        merchant.password = generate_password_hash(new_password)
+        db.session.commit()
+        flash(f'Password for merchant {merchant.username} reset successfully!', 'success')
+    return redirect(url_for('merchants'))
 
 @app.route('/upload_employees', methods=['GET', 'POST'])
 def upload_employees():
@@ -249,22 +322,6 @@ def allocations():
         db.session.commit()
     return render_template('allocations.html', employees=all_emps, month=month)
 
-@app.route('/close_month')
-def close_month():
-    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
-    flash('Month closed successfully.', 'info')
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/create_merchant', methods=['GET', 'POST'])
-def create_merchant():
-    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
-    if request.method == 'POST':
-        db.session.add(User(username=request.form.get('username'), password=generate_password_hash(request.form.get('password')), role='merchant'))
-        db.session.commit()
-        flash('Merchant created!', 'success')
-        return redirect(url_for('admin_dashboard'))
-    return render_template('create_merchant.html')
-
 @app.route('/reset_password/<int:employee_id>', methods=['POST'])
 def reset_password(employee_id):
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
@@ -272,8 +329,10 @@ def reset_password(employee_id):
     if emp.user:
         emp.user.password = generate_password_hash(request.form.get('new_password'))
         db.session.commit()
-        flash('Password reset successfully!', 'success')
+        flash('Employee password reset successfully!', 'success')
     return redirect(url_for('employees'))
+
+# ================= EMPLOYEE & MERCHANT PORTALS =================
 
 @app.route('/employee/dashboard')
 def employee_dashboard():
