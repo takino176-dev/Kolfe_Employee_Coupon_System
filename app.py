@@ -198,6 +198,8 @@ def employees():
     all_employees = Employee.query.all()
     return render_template('employees.html', employees=all_employees)
 
+import openpyxl
+
 @app.route('/upload_employees', methods=['GET', 'POST'])
 def upload_employees():
     if session.get('role') not in ['admin', 'superadmin']:
@@ -207,22 +209,57 @@ def upload_employees():
     if request.method == 'POST':
         file = request.files.get('file')
         if file:
-            stream = io.TextIOWrapper(file.stream, encoding='utf-8')
-            reader = csv.DictReader(stream)
-            for row in reader:
-                emp_id = row.get('employee_id')
-                if emp_id and not Employee.query.filter_by(employee_id=emp_id).first():
-                    qr_token = secrets.token_urlsafe(16)
-                    emp = Employee(
-                        employee_id=emp_id,
-                        full_name=row.get('full_name', ''),
-                        sector=row.get('sector', ''),
-                        qr_token=qr_token
-                    )
-                    db.session.add(emp)
-            db.session.commit()
-            flash('Employees uploaded successfully!', 'success')
-            return redirect(url_for('employees'))
+            filename = file.filename.lower()
+            try:
+                if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                    wb = openpyxl.load_workbook(file)
+                    sheet = wb.active
+                    rows = list(sheet.iter_rows(values_only=True))
+                    if not rows:
+                        flash('Uploaded file is empty.', 'danger')
+                        return redirect(url_for('upload_employees'))
+                    
+                    # Assume first row is header
+                    header = [str(h).strip().lower() for h in rows[0]]
+                    # Map columns by name or index
+                    id_idx = header.index('employee_id') if 'employee_id' in header else 0
+                    name_idx = header.index('full_name') if 'full_name' in header else 1
+                    sector_idx = header.index('sector') if 'sector' in header else 2
+
+                    for row in rows[1:]:
+                        if not row or not row[id_idx]:
+                            continue
+                        emp_id = str(row[id_idx]).strip()
+                        if not Employee.query.filter_by(employee_id=emp_id).first():
+                            qr_token = secrets.token_urlsafe(16)
+                            emp = Employee(
+                                employee_id=emp_id,
+                                full_name=str(row[name_idx]).strip() if row[name_idx] else '',
+                                sector=str(row[sector_idx]).strip() if row[sector_idx] else '',
+                                qr_token=qr_token
+                            )
+                            db.session.add(emp)
+                else:
+                    stream = io.TextIOWrapper(file.stream, encoding='utf-8')
+                    reader = csv.DictReader(stream)
+                    for row in reader:
+                        emp_id = row.get('employee_id')
+                        if emp_id and not Employee.query.filter_by(employee_id=emp_id).first():
+                            qr_token = secrets.token_urlsafe(16)
+                            emp = Employee(
+                                employee_id=emp_id,
+                                full_name=row.get('full_name', ''),
+                                sector=row.get('sector', ''),
+                                qr_token=qr_token
+                            )
+                            db.session.add(emp)
+                
+                db.session.commit()
+                flash('Employees uploaded successfully!', 'success')
+                return redirect(url_for('employees'))
+            except Exception as e:
+                flash(f'Error processing file: {str(e)}', 'danger')
+                return redirect(url_for('upload_employees'))
             
     return render_template('upload.html')
 

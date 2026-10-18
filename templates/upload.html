@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="card" style="max-width: 600px; background: #fff; padding: 30px; margin: 20px auto; border-radius: 8px; border: 1px solid #ddd;">
-    <h2>Bulk Upload Employees (CSV)</h2>
+    <h2>Bulk Upload Employees</h2>
     <p style="color: #666; font-size: 14px; margin-top: 10px;">
-        Upload a CSV file containing columns: <code>employee_id</code>, <code>full_name</code>, <code>sector</code>.
+        Upload any Excel file (<code>.xlsx</code>, <code>.xls</code>) or CSV file containing columns: <b>employee_id</b>, <b>full_name</b>, <b>sector</b>.
     </p>
     <form method="POST" enctype="multipart/form-data" style="margin-top: 20px;">
         <div style="margin-bottom: 20px;">
-            <input type="file" name="file" accept=".csv" required style="padding: 10px; border: 1px solid #ccc; width: 100%; box-sizing: border-box; border-radius: 4px;">
+            <input type="file" name="file" required style="padding: 10px; border: 1px solid #ccc; width: 100%; box-sizing: border-box; border-radius: 4px;">
         </div>
         <button type="submit" style="width: 100%; padding: 12px; background: #17a2b8; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer;">Upload and Import</button>
     </form>
