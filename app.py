@@ -66,8 +66,6 @@ def index():
         if role in ['admin', 'superadmin']: return redirect(url_for('admin_dashboard'))
         elif role == 'merchant': return redirect(url_for('merchant_dashboard'))
         elif role == 'employee': return redirect(url_for('employee_dashboard'))
-    
-    # If admin already exists, go straight to login page!
     if User.query.filter_by(role='admin').first():
         return redirect(url_for('login'))
     return redirect(url_for('setup'))
@@ -114,9 +112,8 @@ def logout():
 @app.route('/admin')
 def admin_dashboard():
     if session.get('role') not in ['admin', 'superadmin']:
-        flash('Unauthorized.', 'danger')
+        flash('Unauthorized access.', 'danger')
         return redirect(url_for('login'))
-    
     month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
     employees_count = Employee.query.count()
     allocations = CouponAllocation.query.filter_by(month=month).all()
@@ -124,7 +121,6 @@ def admin_dashboard():
     transactions = Transaction.query.filter_by(month=month).all()
     total_spent = sum(t.amount for t in transactions)
     recent_transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
-    
     return render_template('admin.html', month=month, employees=employees_count, 
                            allocated=total_allocated, spent=total_spent, collected=total_spent, 
                            transactions=recent_transactions)
@@ -172,8 +168,7 @@ def add_employee():
 def delete_employee(emp_id):
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     emp = Employee.query.get_or_404(emp_id)
-    if emp.user:
-        db.session.delete(emp.user)
+    if emp.user: db.session.delete(emp.user)
     CouponAllocation.query.filter_by(employee_id=emp.id).delete()
     db.session.delete(emp)
     db.session.commit()
@@ -184,7 +179,93 @@ def delete_employee(emp_id):
 def merchants():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     all_merchants = User.query.filter_by(role='merchant').all()
-    return render_template('merchants.html', merchants=all_merchants)
+    
+    HTML_TEMPLATE = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Merchant Management - Kolfe System</title>
+        <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+            body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
+            .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+            .navbar-brand { color: #ffffff; font-size: 22px; font-weight: 700; }
+            .nav-links { display: flex; gap: 12px; }
+            .nav-btn { text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; color: #f8fafc; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); }
+            .nav-btn:hover { background: rgba(255,255,255,0.25); color: #ffffff; }
+            .container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
+            .header-box { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+            .header-title { font-size: 28px; font-weight: 800; color: #0f172a; }
+            .btn-add { text-decoration: none; padding: 10px 20px; background: #16a34a; color: #ffffff; font-weight: 700; border-radius: 8px; }
+            .btn-add:hover { background: #15803d; }
+            .card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+            table { width: 100%; border-collapse: collapse; text-align: left; }
+            th { background-color: #f8fafc; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
+            td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #334155; }
+            tr:hover { background-color: #f8fafc; }
+            .badge-merchant { background: #dcfce7; color: #15803d; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+            .btn-delete { padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; background: #ef4444; color: #ffffff; }
+            .btn-delete:hover { background: #dc2626; }
+            .alert { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 600; background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        </style>
+    </head>
+    <body>
+        <nav class="navbar">
+            <div class="navbar-brand">🏢 Kolfe Employee Coupon System</div>
+            <div class="nav-links">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-btn">Dashboard</a>
+                <a href="{{ url_for('employees') }}" class="nav-btn">Employees</a>
+                <a href="{{ url_for('merchants') }}" class="nav-btn">Merchants</a>
+                <a href="{{ url_for('logout') }}" class="nav-btn" style="background:#ef4444;">Logout</a>
+            </div>
+        </nav>
+        <div class="container">
+            <div class="header-box">
+                <h2 class="header-title">Merchant Management</h2>
+                <a href="{{ url_for('create_merchant') }}" class="btn-add">➕ Add New Merchant</a>
+            </div>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            <div class="card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Merchant Username</th>
+                            <th>Role Account</th>
+                            <th style="text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for merchant in merchants %}
+                        <tr>
+                            <td style="font-weight: 700;">{{ merchant.username }}</td>
+                            <td><span class="badge-merchant">Merchant</span></td>
+                            <td style="text-align: right;">
+                                <form action="{{ url_for('delete_merchant', merchant_id=merchant.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Remove this merchant account permanently?');">
+                                    <button type="submit" class="btn-delete">🗑️ Delete Access</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" style="text-align: center; color: #94a3b8; padding: 24px;">No merchants created yet. Click "+ Add New Merchant" above to create one!</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(HTML_TEMPLATE, merchants=all_merchants)
 
 @app.route('/create_merchant', methods=['GET', 'POST'])
 def create_merchant():
