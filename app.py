@@ -60,7 +60,7 @@ with app.app_context():
 def handle_exception(e):
     return f"<h2 style='color:red; font-family:Arial;'>Application Error:</h2><pre>{str(e)}</pre>", 500
 
-# ================= AUTH & ROUTING =================
+# ================= AUTHENTICATION & SECURITY =================
 
 @app.route('/')
 def index():
@@ -100,7 +100,7 @@ def login():
             session['role'] = user.role
             
             if user.role == 'employee' and getattr(user, 'is_first_login', True):
-                flash('First login detected! Please change your password to continue.', 'warning')
+                flash('First login detected! Please set a new password to continue.', 'warning')
                 return redirect(url_for('employee_change_password'))
 
             flash('Logged in successfully.', 'success')
@@ -116,7 +116,7 @@ def logout():
     flash('Logged out successfully.', 'info')
     return redirect(url_for('login'))
 
-# ================= ADMIN ROUTES =================
+# ================= ADMIN MANAGEMENT =================
 
 @app.route('/dashboard')
 @app.route('/admin')
