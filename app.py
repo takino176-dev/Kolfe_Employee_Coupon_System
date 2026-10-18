@@ -11,8 +11,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe-secret-key-2026')
 
-# Use a new database version name so Render creates it fresh with all columns
-db_path = os.path.join('/tmp', 'coupon_system_v3.db')
+# SQLite Database setup for Render
+db_path = os.path.join('/tmp', 'coupon_system_v4.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -361,7 +361,7 @@ def merchant_scan():
     allocated_amt = allocation.amount if allocation else 0.0
     
     spent_amt = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all())
-    balance = allocated_amt - spent_aly = allocated_amt - spent_amt
+    balance = allocated_amt - spent_amt
     
     if amount > balance:
         flash(f'Insufficient balance! Available balance is {balance:.2f}.', 'danger')
