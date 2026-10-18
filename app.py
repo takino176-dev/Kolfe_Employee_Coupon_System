@@ -337,3 +337,36 @@ def employee_change_password():
     if session.get('role') != 'employee': return redirect(url_for('login'))
     User.query.get(session.get('user_id')).password = generate_password_hash(request.form.get('new_password'))
     db.session.commit()
+    flash('Password updated.', 'success')
+    return redirect(url_for('employee_dashboard'))
+
+@app.route('/merchant/dashboard')
+def merchant_dashboard():
+    if session.get('role') != 'merchant': return redirect(url_for('login'))
+    month = datetime.utcnow().strftime('%Y-%m')
+    txs = Transaction.query.filter_by(merchant_id=session.get('user_id'), month=month).all()
+    return render_template('merchant.html', transactions=txs, total_collected=sum(t.amount for t in txs), month=month)
+
+@app.route('/merchant/scan', methods=['POST'])
+def merchant_scan():
+    if session.get('role') != 'merchant': return redirect(url_for('login'))
+    token = request.form.get('qr_token')
+    amount = float(request.form.get('amount', 0))
+    month = datetime.utcnow().strftime('%Y-%m')
+    emp = Employee.query.filter_by(qr_token=token).first()
+    if not emp:
+        flash('Invalid QR.', 'danger')
+        return redirect(url_for('merchant_dashboard'))
+    alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
+    allocated = alloc.amount if alloc else 0.0
+    spent = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all())
+    if amount > (allocated - spent):
+        flash('Insufficient balance!', 'danger')
+        return redirect(url_for('merchant_dashboard'))
+    db.session.add(Transaction(reference=secrets.token_hex(6).upper(), employee_id=emp.id, merchant_id=session.get('user_id'), amount=amount, month=month))
+    db.session.commit()
+    flash('Redeemed successfully!', 'success')
+    return redirect(url_for('merchant_dashboard'))
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
