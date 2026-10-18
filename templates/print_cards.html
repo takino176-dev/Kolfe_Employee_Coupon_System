@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Printable Employee QR Cards</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #fff; margin: 20px; }
+        .grid { display: flex; flex-wrap: wrap; gap: 20px; }
+        .card { width: 220px; border: 2px dashed #333; padding: 15px; border-radius: 8px; text-align: center; page-break-inside: avoid; }
+        h4 { margin: 5px 0; color: #007bff; }
+        p { margin: 3px 0; font-size: 13px; color: #444; }
+        @media print {
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print" style="margin-bottom: 20px;">
+    <button onclick="window.print()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">Print Cards</button>
+</div>
+
+<div class="grid">
+    {% for emp in employees %}
+    <div class="card">
+        <h4>Kolfe Employee Card</h4>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data={{ emp.qr_token }}" alt="QR Code">
+        <p><b>Name:</b> {{ emp.full_name }}</p>
+        <p><b>ID:</b> {{ emp.employee_id }}</p>
+        <p><b>Sector:</b> {{ emp.sector }}</p>
+    </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>

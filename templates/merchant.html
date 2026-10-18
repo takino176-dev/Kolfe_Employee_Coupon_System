@@ -1,1 +1,28 @@
-{% extends "base.html" %}{% block content %}<div class="row"><div><h1>Merchant collection</h1><p class="muted">Month {{ month }} · {{ 'CLOSED' if closed else 'Open' }}</p></div><form method="get"><label>Month</label><input type="month" name="month" value="{{ month }}"><button>View</button></form></div><div class="grid"><div class="stat"><small>Coupons collected</small><strong>{{ "%.2f"|format(total) }}</strong></div><div class="stat"><small>Recent transactions</small><strong>{{ txs|length }}</strong></div></div><div class="panel"><h2>Record payment after service</h2><p class="muted">Enter scanned QR token or employee ID. Camera scanning is not yet included.</p><form method="post" action="{{ url_for('charge') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Employee QR token or ID</label><input name="employee_lookup" required><label>Amount received</label><input type="number" name="amount" min=".01" step=".01" required><button {{ 'disabled' if closed else '' }}>Confirm payment</button></form></div><div class="panel table-wrap"><h2>Collection history</h2><table><tr><th>Date UTC</th><th>Reference</th><th>Employee</th><th>Sector</th><th>Amount</th></tr>{% for t in txs %}<tr><td>{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ t.reference }}</td><td>{{ t.employee.employee_id }} — {{ t.employee.full_name }}</td><td>{{ t.employee.sector }}</td><td>{{ "%.2f"|format(t.amount) }}</td></tr>{% else %}<tr><td colspan="5">No payments.</td></tr>{% endfor %}</table></div>{% endblock %}
+{% extends "base.html" %}
+{% block content %}
+
+<div style="max-width: 600px; margin: 0 auto;">
+    <div style="background: #fff; padding: 25px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 20px;">
+        <h2>Merchant Scanner Portal</h2>
+        <p style="color: #666; font-size: 14px;">Scan or type the Employee's QR Token to deduct coupons for services/meals.</p>
+
+        <form action="{{ url_for('merchant_scan') }}" method="POST" style="margin-top: 20px;">
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">QR Code Token</label>
+                <input type="text" name="qr_token" placeholder="Scan QR code here..." required autofocus style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px;">
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: bold; margin-bottom: 5px;">Coupon Amount to Deduct</label>
+                <input type="number" step="0.01" name="amount" placeholder="e.g. 50.00" required style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px;">
+            </div>
+            <button type="submit" style="width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer;">Redeem Coupon</button>
+        </form>
+    </div>
+
+    <!-- Merchant Collection Summary -->
+    <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #ddd;">
+        <h3>Total Collected This Month ({{ month }}): <span style="color: #28a745;">{{ "%.2f"|format(total_collected) }}</span></h3>
+    </div>
+</div>
+
+{% endblock %}
