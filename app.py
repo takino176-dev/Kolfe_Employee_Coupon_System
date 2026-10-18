@@ -11,19 +11,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe-secret-key-2026')
 
+# Lock database file to root folder so it never gets wiped out
 db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'coupon_system.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# ================= DATABASE MODELS =================
-
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'admin', 'merchant', 'employee'
+    role = db.Column(db.String(20), nullable=False)
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -57,8 +56,6 @@ with app.app_context():
 @app.errorhandler(Exception)
 def handle_exception(e):
     return f"<h2 style='color:red; font-family:Arial;'>Application Error:</h2><pre>{str(e)}</pre>", 500
-
-# ================= AUTH & GENERAL ROUTES =================
 
 @app.route('/')
 def index():
@@ -107,8 +104,6 @@ def logout():
     session.clear()
     flash('Logged out successfully.', 'info')
     return redirect(url_for('login'))
-
-# ================= ADMIN MANAGEMENT =================
 
 @app.route('/dashboard')
 @app.route('/admin')
@@ -177,7 +172,7 @@ def delete_employee(emp_id):
     CouponAllocation.query.filter_by(employee_id=emp.id).delete()
     db.session.delete(emp)
     db.session.commit()
-    flash('Employee and associated user account removed.', 'success')
+    flash('Employee removed successfully.', 'success')
     return redirect(url_for('employees'))
 
 @app.route('/merchants')
@@ -219,7 +214,7 @@ def reset_merchant_password(merchant_id):
     if merchant and new_password:
         merchant.password = generate_password_hash(new_password)
         db.session.commit()
-        flash(f'Password for merchant {merchant.username} reset successfully!', 'success')
+        flash('Merchant password reset successfully!', 'success')
     return redirect(url_for('merchants'))
 
 @app.route('/upload_employees', methods=['GET', 'POST'])
@@ -331,8 +326,6 @@ def reset_password(employee_id):
         db.session.commit()
         flash('Employee password reset successfully!', 'success')
     return redirect(url_for('employees'))
-
-# ================= EMPLOYEE & MERCHANT PORTALS =================
 
 @app.route('/employee/dashboard')
 def employee_dashboard():
