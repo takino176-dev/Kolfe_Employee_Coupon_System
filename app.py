@@ -23,7 +23,7 @@ db = SQLAlchemy(app)
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=True)  # Allowed nullable for password-free initial setup
+    password = db.Column(db.String(200), nullable=True)
     role = db.Column(db.String(20), nullable=False)
     is_first_login = db.Column(db.Boolean, default=True)
 
@@ -96,15 +96,15 @@ def login():
         
         user = User.query.filter_by(username=username).first()
         if user:
-            # First-time login for employees bypasses password check
+            # PASSWORD-FREE FIRST LOGIN FOR EMPLOYEES
             if user.role == 'employee' and user.is_first_login:
                 session['user_id'] = user.id
                 session['username'] = user.username
-                session['role'] = user.role
-                flash('Welcome! As a new employee, please create a password for your account.', 'info')
+                session['role'] = 'employee'
+                flash('First login detected! Please set your new personal password.', 'info')
                 return redirect(url_for('employee_change_password'))
 
-            # Regular authentication with password check
+            # REGULAR PASSWORD CHECK
             if user.password and check_password_hash(user.password, password):
                 session['user_id'] = user.id
                 session['username'] = user.username
@@ -116,7 +116,7 @@ def login():
             else:
                 flash('Invalid password for this account.', 'danger')
         else:
-            flash('Invalid username or Employee ID.', 'danger')
+            flash('Invalid Employee ID or Username.', 'danger')
 
     return render_template('login.html')
 
@@ -132,7 +132,6 @@ def logout():
 @app.route('/admin')
 def admin_dashboard():
     if session.get('role') not in ['admin', 'superadmin']:
-        flash('Unauthorized access.', 'danger')
         return redirect(url_for('login'))
     month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
     employees_count = Employee.query.count()
@@ -168,9 +167,9 @@ def employees():
 def add_employee():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     if request.method == 'POST':
-        emp_id = request.form.get('employee_id').strip()
-        full_name = request.form.get('full_name')
-        sector = request.form.get('sector')
+        emp_id = request.form.get('employee_id', '').strip()
+        full_name = request.form.get('full_name', '').strip()
+        sector = request.form.get('sector', '').strip()
         
         u = User.query.filter_by(username=emp_id).first()
         if not u:
@@ -187,7 +186,7 @@ def add_employee():
             db.session.add(Employee(employee_id=emp_id, full_name=full_name, sector=sector, qr_token=secrets.token_urlsafe(16), user_id=u.id))
 
         db.session.commit()
-        flash('Employee added successfully! They can log in with their Employee ID.', 'success')
+        flash(f'Employee {full_name} added! They can log in using Employee ID: {emp_id}', 'success')
         return redirect(url_for('employees'))
     return render_template('employee_form.html')
 
@@ -214,10 +213,8 @@ def reset_password(employee_id):
             u.password = None
             u.is_first_login = True
             db.session.commit()
-            flash('Employee password reset! They can log in again without a password.', 'success')
+            flash('Employee password reset! They can log in password-free to set a new password.', 'success')
     return redirect(url_for('employees'))
-
-# ================= MERCHANTS MANAGEMENT =================
 
 @app.route('/merchants')
 def merchants():
@@ -225,89 +222,10 @@ def merchants():
     all_merchants = User.query.filter_by(role='merchant').all()
     
     MERCHANTS_HTML = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Merchant Management - Kolfe System</title>
-        <style>
-            * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-            body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
-            .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-            .navbar-brand { color: #ffffff; font-size: 22px; font-weight: 700; }
-            .nav-links { display: flex; gap: 12px; }
-            .nav-btn { text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; color: #f8fafc; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); }
-            .nav-btn:hover { background: rgba(255,255,255,0.25); color: #ffffff; }
-            .container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
-            .header-box { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-            .header-title { font-size: 28px; font-weight: 800; color: #0f172a; }
-            .btn-add { text-decoration: none; padding: 10px 20px; background: #16a34a; color: #ffffff; font-weight: 700; border-radius: 8px; }
-            .btn-add:hover { background: #15803d; }
-            .card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-            table { width: 100%; border-collapse: collapse; text-align: left; }
-            th { background-color: #f8fafc; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
-            td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #334155; }
-            tr:hover { background-color: #f8fafc; }
-            .badge-merchant { background: #dcfce7; color: #15803d; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
-            .btn-delete { padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; background: #ef4444; color: #ffffff; }
-            .btn-delete:hover { background: #dc2626; }
-            .alert { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 600; background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
-        </style>
-    </head>
-    <body>
-        <nav class="navbar">
-            <div class="navbar-brand">🏢 Kolfe Employee Coupon System</div>
-            <div class="nav-links">
-                <a href="{{ url_for('admin_dashboard') }}" class="nav-btn">Dashboard</a>
-                <a href="{{ url_for('employees') }}" class="nav-btn">Employees</a>
-                <a href="{{ url_for('merchants') }}" class="nav-btn">Merchants</a>
-                <a href="{{ url_for('logout') }}" class="nav-btn" style="background:#ef4444;">Logout</a>
-            </div>
-        </nav>
-        <div class="container">
-            <div class="header-box">
-                <h2 class="header-title">Merchant Management</h2>
-                <a href="{{ url_for('create_merchant') }}" class="btn-add">➕ Add New Merchant</a>
-            </div>
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert">{{ message }}</div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-            <div class="card">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Merchant Username</th>
-                            <th>Role Account</th>
-                            <th style="text-align: right;">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for merchant in merchants %}
-                        <tr>
-                            <td style="font-weight: 700;">{{ merchant.username }}</td>
-                            <td><span class="badge-merchant">Merchant</span></td>
-                            <td style="text-align: right;">
-                                <form action="{{ url_for('delete_merchant', merchant_id=merchant.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Remove this merchant account permanently?');">
-                                    <button type="submit" class="btn-delete">🗑️ Delete Access</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="3" style="text-align: center; color: #94a3b8; padding: 24px;">No merchants created yet. Click "+ Add New Merchant" above to create one!</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </body>
-    </html>
+    <!DOCTYPE html><html><head><title>Merchants</title>
+    <style>body{font-family:sans-serif;padding:30px;background:#f1f5f9;}.card{background:#fff;padding:24px;border-radius:12px;}</style></head>
+    <body><div class="card"><h2>Merchant Management</h2><a href="{{ url_for('create_merchant') }}">+ Add Merchant</a> | <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+    <hr><ul>{% for m in merchants %}<li>{{ m.username }}</li>{% else %}<li>No merchants found.</li>{% endfor %}</ul></div></body></html>
     """
     return render_template_string(MERCHANTS_HTML, merchants=all_merchants)
 
@@ -441,14 +359,15 @@ def reports_csv():
     output.close()
     return send_file(byte_output, mimetype='text/csv', download_name='transactions_report.csv', as_attachment=True)
 
-# ================= EMPLOYEE PORTAL =================
+# ================= EMPLOYEE PORTAL (EMBEDDED) =================
 
 @app.route('/employee/dashboard')
 def employee_dashboard():
-    if session.get('role') != 'employee': return redirect(url_for('login'))
-    user = User.query.get(session.get('user_id'))
+    if session.get('role') != 'employee': 
+        return redirect(url_for('login'))
     
-    if user.is_first_login:
+    user = User.query.get(session.get('user_id'))
+    if user and user.is_first_login:
         flash('Please create a password for your account first.', 'warning')
         return redirect(url_for('employee_change_password'))
 
@@ -459,7 +378,109 @@ def employee_dashboard():
     spent = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all()) if emp else 0.0
     all_txs = Transaction.query.filter_by(employee_id=emp.id).order_by(Transaction.created_at.desc()).all() if emp else []
 
-    return render_template('employee_dashboard.html', user=user, emp=emp, allocated=allocated, spent=spent, balance=allocated-spent, transactions=all_txs, month=month)
+    EMP_HTML = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Employee Portal - Kolfe Coupon System</title>
+        <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+        <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+            body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
+            .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+            .navbar-brand { color: #ffffff; font-size: 20px; font-weight: 700; }
+            .nav-btn { text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; color: #ffffff; background: #ef4444; border: none; }
+            .container { max-width: 900px; margin: 30px auto; padding: 0 20px; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px; }
+            .card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+            .card h6 { font-size: 13px; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 6px; }
+            .card h3 { font-size: 28px; font-weight: 800; }
+            .qr-box { text-align: center; margin: 20px 0; }
+            #qrcode { display: inline-block; padding: 15px; background: #fff; border: 2px dashed #cbd5e1; border-radius: 12px; }
+            table { width: 100%; border-collapse: collapse; text-align: left; }
+            th { background-color: #f8fafc; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
+            td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #334155; }
+            .alert { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 700; background-color: #dcfce7; color: #15803d; }
+        </style>
+    </head>
+    <body>
+        <nav class="navbar">
+            <div class="navbar-brand">👤 Employee Portal ({{ emp.full_name if emp else user.username }})</div>
+            <div>
+                <a href="{{ url_for('employee_change_password') }}" style="color:#38bdf8; text-decoration:none; margin-right:15px; font-weight:600;">🔐 Change Password</a>
+                <a href="{{ url_for('logout') }}" class="nav-btn">Logout</a>
+            </div>
+        </nav>
+
+        <div class="container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="grid">
+                <div class="card" style="border-top: 4px solid #2563eb;">
+                    <h6>Monthly Allocation ({{ month }})</h6>
+                    <h3 style="color:#2563eb;">{{ "%.2f"|format(allocated) }} ETB</h3>
+                </div>
+                <div class="card" style="border-top: 4px solid #ef4444;">
+                    <h6>Total Spent</h6>
+                    <h3 style="color:#ef4444;">{{ "%.2f"|format(spent) }} ETB</h3>
+                </div>
+                <div class="card" style="border-top: 4px solid #16a34a;">
+                    <h6>Remaining Balance</h6>
+                    <h3 style="color:#16a34a;">{{ "%.2f"|format(balance) }} ETB</h3>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 25px;">
+                <h4 style="font-size: 18px; font-weight:700; margin-bottom:10px;">Your Digital Coupon QR Card</h4>
+                <p style="font-size: 14px; color:#64748b;">Show this QR code to cafeteria merchants to redeem your coupon.</p>
+                <div class="qr-box">
+                    <div id="qrcode"></div>
+                    <p style="margin-top:10px; font-family:monospace; font-weight:700; color:#475569;">Token: {{ emp.qr_token if emp else 'N/A' }}</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h4 style="font-size: 18px; font-weight:700; margin-bottom:15px;">Your Redemption History</h4>
+                <table>
+                    <thead>
+                        <tr><th>Date & Time</th><th>Reference</th><th>Amount Redeemed</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for t in transactions %}
+                        <tr>
+                            <td>{{ t.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td><code>{{ t.reference }}</code></td>
+                            <td style="font-weight:700; color:#ef4444;">-{{ "%.2f"|format(t.amount) }} ETB</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No coupon redemptions recorded yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <script>
+            {% if emp and emp.qr_token %}
+            new QRCode(document.getElementById("qrcode"), {
+                text: "{{ emp.qr_token }}",
+                width: 180,
+                height: 180
+            });
+            {% endif %}
+        </script>
+    </body>
+    </html>
+    """
+    return render_template_string(EMP_HTML, user=user, emp=emp, allocated=allocated, spent=spent, balance=allocated-spent, transactions=all_txs, month=month)
 
 @app.route('/employee/change_password', methods=['GET', 'POST'])
 def employee_change_password():
@@ -473,7 +494,17 @@ def employee_change_password():
             db.session.commit()
             flash('Password set successfully! Welcome to your dashboard.', 'success')
             return redirect(url_for('employee_dashboard'))
-    return render_template('employee_password.html')
+            
+    PWD_HTML = """
+    <!DOCTYPE html><html><head><title>Create Password</title>
+    <style>body{font-family:sans-serif;background:#f1f5f9;display:flex;justify-content:center;align-items:center;height:100vh;}
+    .card{background:#fff;padding:30px;border-radius:12px;width:350px;box-shadow:0 4px 6px rgba(0,0,0,0.1);}
+    input{width:100%;padding:10px;margin:10px 0 20px 0;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;}
+    button{width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;}</style></head>
+    <body><div class="card"><h3>🔐 Set New Password</h3><p style="font-size:13px;color:#64748b;">Please create a new password for your employee account.</p>
+    <form method="POST"><label>New Password:</label><input type="password" name="new_password" required placeholder="Enter new password"><button type="submit">Save Password</button></form></div></body></html>
+    """
+    return render_template_string(PWD_HTML)
 
 # ================= MERCHANT PORTAL =================
 
