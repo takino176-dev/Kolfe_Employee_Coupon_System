@@ -27,14 +27,7 @@ class User(db.Model):
     role = db.Column(db.String(20), nullable=False)  # 'admin' or 'merchant'
 
 class Employee(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.String(50), unique=True, nullable=False)
-    full_name = db.Column(db.String(120), nullable=False)
-    sector = db.Column(db.String(120), nullable=False)
-    qr_token = db.Column(db.String(100), unique=True, nullable=False)
-    # Automatically delete transactions if employee is deleted
-    transactions = db.relationship('Transaction', backref='employee', cascade='all, delete-orphan', lazy=True)
-
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False)
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     reference = db.Column(db.String(100), unique=True, nullable=False)
