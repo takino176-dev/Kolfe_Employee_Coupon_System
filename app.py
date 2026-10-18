@@ -11,20 +11,17 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe-secret-key-2026')
 
-# Persistent DB path on Render
-db_path = os.path.join('/tmp', 'coupon_system_v7.db')
+db_path = os.path.join('/tmp', 'coupon_system_v9.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# ================= DATABASE MODELS =================
-
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'admin', 'merchant', 'employee'
+    role = db.Column(db.String(20), nullable=False)
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -55,23 +52,17 @@ class Transaction(db.Model):
 with app.app_context():
     db.create_all()
 
-# Global Error Handler so 500 Internal Server Errors show exact details instead of a blank screen
 @app.errorhandler(Exception)
 def handle_exception(e):
     return f"<h2 style='color:red; font-family:Arial;'>Application Error:</h2><pre>{str(e)}</pre>", 500
-
-# ================= AUTH & GENERAL ROUTES =================
 
 @app.route('/')
 def index():
     if 'user_id' in session:
         role = session.get('role')
-        if role in ['admin', 'superadmin']: 
-            return redirect(url_for('admin_dashboard'))
-        elif role == 'merchant': 
-            return redirect(url_for('merchant_dashboard'))
-        elif role == 'employee': 
-            return redirect(url_for('employee_dashboard'))
+        if role in ['admin', 'superadmin']: return redirect(url_for('admin_dashboard'))
+        elif role == 'merchant': return redirect(url_for('merchant_dashboard'))
+        elif role == 'employee': return redirect(url_for('employee_dashboard'))
     return redirect(url_for('login'))
 
 @app.route('/setup', methods=['GET', 'POST'])
@@ -101,12 +92,9 @@ def login():
             session['username'] = user.username
             session['role'] = user.role
             flash('Logged in successfully.', 'success')
-            if user.role in ['admin', 'superadmin']: 
-                return redirect(url_for('admin_dashboard'))
-            elif user.role == 'merchant': 
-                return redirect(url_for('merchant_dashboard'))
-            elif user.role == 'employee': 
-                return redirect(url_for('employee_dashboard'))
+            if user.role in ['admin', 'superadmin']: return redirect(url_for('admin_dashboard'))
+            elif user.role == 'merchant': return redirect(url_for('merchant_dashboard'))
+            elif user.role == 'employee': return redirect(url_for('employee_dashboard'))
         flash('Invalid username or password.', 'danger')
     return render_template('login.html')
 
@@ -115,8 +103,6 @@ def logout():
     session.clear()
     flash('Logged out successfully.', 'info')
     return redirect(url_for('login'))
-
-# ================= ADMIN ROUTES =================
 
 @app.route('/dashboard')
 @app.route('/admin')
@@ -141,7 +127,8 @@ def admin_dashboard():
 def employees():
     if session.get('role') not in ['admin', 'superadmin']: 
         return redirect(url_for('login'))
-    return render_template('employees.html', employees=Employee.query.all())
+    all_emps = Employee.query.all()
+    return render_template('employees.html', employees=all_emps, rows=all_emps)
 
 @app.route('/add_employee', methods=['GET', 'POST'])
 def add_employee():
@@ -160,7 +147,7 @@ def add_employee():
         emp = Employee(employee_id=emp_id, full_name=full_name, sector=sector, qr_token=secrets.token_urlsafe(16), user_id=u.id)
         db.session.add(emp)
         db.session.commit()
-        flash('Employee added!', 'success')
+        flash('Employee added successfully!', 'success')
         return redirect(url_for('employees'))
     return render_template('employee_form.html')
 
@@ -171,22 +158,37 @@ def upload_employees():
     if request.method == 'POST':
         file = request.files.get('file')
         if file:
+            filename = file.filename.lower()
             try:
-                wb = openpyxl.load_workbook(io.BytesIO(file.read()))
-                sheet = wb.active
-                rows = list(sheet.iter_rows(values_only=True))
-                for row in rows[1:]:
-                    if row and row[0]:
-                        e_id = str(row[0]).strip()
-                        if not Employee.query.filter_by(employee_id=e_id).first():
-                            u = User(username=e_id, password=generate_password_hash(e_id), role='employee')
-                            db.session.add(u)
-                            db.session.flush()
-                            db.session.add(Employee(employee_id=e_id, full_name=str(row[1]), sector=str(row[2]), qr_token=secrets.token_urlsafe(16), user_id=u.id))
+                file_bytes = file.read()
+                if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                    wb = openpyxl.load_workbook(io.BytesIO(file_bytes))
+                    sheet = wb.active
+                    excel_rows = list(sheet.iter_rows(values_only=True))
+                    for row in excel_rows[1:]:
+                        if row and row[0]:
+                            e_id = str(row[0]).strip()
+                            if e_id and not Employee.query.filter_by(employee_id=e_id).first():
+                                u = User(username=e_id, password=generate_password_hash(e_id), role='employee')
+                                db.session.add(u)
+                                db.session.flush()
+                                db.session.add(Employee(employee_id=e_id, full_name=str(row[1] or ''), sector=str(row[2] or ''), qr_token=secrets.token_urlsafe(16), user_id=u.id))
+                else:
+                    stream = io.TextIOWrapper(io.BytesIO(file_bytes), encoding='utf-8')
+                    csv_reader = csv.reader(stream)
+                    next(csv_reader, None)
+                    for row in csv_reader:
+                        if row and row[0]:
+                            e_id = str(row[0]).strip()
+                            if e_id and not Employee.query.filter_by(employee_id=e_id).first():
+                                u = User(username=e_id, password=generate_password_hash(e_id), role='employee')
+                                db.session.add(u)
+                                db.session.flush()
+                                db.session.add(Employee(employee_id=e_id, full_name=str(row[1] if len(row) > 1 else ''), sector=str(row[2] if len(row) > 2 else ''), qr_token=secrets.token_urlsafe(16), user_id=u.id))
                 db.session.commit()
-                flash('Uploaded successfully!', 'success')
+                flash('Employees uploaded successfully!', 'success')
             except Exception as e:
-                flash(f'Error: {str(e)}', 'danger')
+                flash(f'Error processing file: {str(e)}', 'danger')
         return redirect(url_for('employees'))
     return render_template('upload.html')
 
@@ -194,7 +196,8 @@ def upload_employees():
 def print_cards():
     if session.get('role') not in ['admin', 'superadmin']: 
         return redirect(url_for('login'))
-    return render_template('print_cards.html', employees=Employee.query.all())
+    all_emps = Employee.query.all()
+    return render_template('print_cards.html', employees=all_emps, rows=all_emps)
 
 @app.route('/qrlist')
 def qrlist():
@@ -228,17 +231,16 @@ def allocations():
     if session.get('role') not in ['admin', 'superadmin']: 
         return redirect(url_for('login'))
     month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
+    all_emps = Employee.query.all()
     if request.method == 'POST':
         amount = float(request.form.get('amount', 0))
-        for emp in Employee.query.all():
+        for emp in all_emps:
             alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
-            if alloc: 
-                alloc.amount = amount
-            else: 
-                db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
+            if alloc: alloc.amount = amount
+            else: db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
         db.session.commit()
-        flash('Allocated!', 'success')
-    return render_template('allocations.html', employees=Employee.query.all(), month=month)
+        flash('Allocated successfully!', 'success')
+    return render_template('allocations.html', employees=all_emps, rows=all_emps, month=month)
 
 @app.route('/close_month')
 def close_month():
@@ -266,10 +268,8 @@ def reset_password(employee_id):
     if emp.user:
         emp.user.password = generate_password_hash(request.form.get('new_password'))
         db.session.commit()
-        flash('Password reset!', 'success')
+        flash('Password reset successfully!', 'success')
     return redirect(url_for('employees'))
-
-# ================= EMPLOYEE PORTAL =================
 
 @app.route('/employee/dashboard')
 def employee_dashboard():
@@ -291,8 +291,6 @@ def employee_change_password():
     db.session.commit()
     flash('Password updated.', 'success')
     return redirect(url_for('employee_dashboard'))
-
-# ================= MERCHANT PORTAL =================
 
 @app.route('/merchant/dashboard')
 def merchant_dashboard():
