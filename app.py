@@ -59,6 +59,8 @@ with app.app_context():
 def handle_exception(e):
     return f"<h2 style='color:red; font-family:Arial;'>Application Error:</h2><pre>{str(e)}</pre>", 500
 
+# ================= SECURITY & ROUTING =================
+
 @app.route('/')
 def index():
     if 'user_id' in session:
@@ -107,6 +109,8 @@ def logout():
     session.clear()
     flash('Logged out successfully.', 'info')
     return redirect(url_for('login'))
+
+# ================= ADMIN DASHBOARD & MANAGEMENT =================
 
 @app.route('/dashboard')
 @app.route('/admin')
@@ -174,6 +178,8 @@ def delete_employee(emp_id):
     db.session.commit()
     flash('Employee removed successfully.', 'success')
     return redirect(url_for('employees'))
+
+# ================= SECURE INLINE MERCHANTS MANAGEMENT =================
 
 @app.route('/merchants')
 def merchants():
@@ -401,6 +407,8 @@ def reset_password(employee_id):
         db.session.commit()
         flash('Employee password reset successfully!', 'success')
     return redirect(url_for('employees'))
+
+# ================= EMPLOYEE & MERCHANT PORTALS =================
 
 @app.route('/employee/dashboard')
 def employee_dashboard():
