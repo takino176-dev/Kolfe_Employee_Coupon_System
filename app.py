@@ -2,6 +2,7 @@ import os
 import secrets
 import csv
 import io
+import openpyxl
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from flask_sqlalchemy import SQLAlchemy
@@ -31,12 +32,13 @@ class Employee(db.Model):
     full_name = db.Column(db.String(120), nullable=False)
     sector = db.Column(db.String(120), nullable=False)
     qr_token = db.Column(db.String(100), unique=True, nullable=False)
+    # Automatically delete transactions if employee is deleted
+    transactions = db.relationship('Transaction', backref='employee', cascade='all, delete-orphan', lazy=True)
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     reference = db.Column(db.String(100), unique=True, nullable=False)
-    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
-    employee = db.relationship('Employee', backref=db.backref('transactions', lazy=True))
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', onDELETE='CASCADE'), nullable=False)
     merchant_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -104,19 +106,23 @@ def admin_dashboard():
         flash('Unauthorized access.', 'danger')
         return redirect(url_for('login'))
         
-    month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
-    employees_count = Employee.query.count()
-    transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
-    total_spent = sum(t.amount for t in transactions)
-    
-    return render_template('admin.html', 
-                           month=month, 
-                           employees=employees_count, 
-                           allocated=0.00, 
-                           spent=total_spent, 
-                           collected=total_spent, 
-                           transactions=transactions, 
-                           lang=session.get('lang', 'en'))
+    try:
+        month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
+        employees_count = Employee.query.count()
+        transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
+        total_spent = sum(t.amount for t in transactions) if transactions else 0.0
+        
+        return render_template('admin.html', 
+                               month=month, 
+                               employees=employees_count, 
+                               allocated=0.00, 
+                               spent=total_spent, 
+                               collected=total_spent, 
+                               transactions=transactions, 
+                               lang=session.get('lang', 'en'))
+    except Exception as e:
+        flash(f'Dashboard error: {str(e)}', 'danger')
+        return render_template('admin.html', month=datetime.utcnow().strftime('%Y-%m'), employees=0, allocated=0.0, spent=0.0, collected=0.0, transactions=[], lang='en')
 
 @app.route('/create_merchant', methods=['GET', 'POST'])
 def create_merchant():
@@ -186,7 +192,7 @@ def delete_employee(employee_id):
     db.session.delete(employee)
     db.session.commit()
     
-    flash(f'Employee {employee.full_name} deleted successfully.', 'success')
+    flash(f'Employee deleted successfully.', 'success')
     return redirect(url_for('employees'))
 
 @app.route('/employees')
@@ -197,8 +203,6 @@ def employees():
         
     all_employees = Employee.query.all()
     return render_template('employees.html', employees=all_employees)
-
-import openpyxl
 
 @app.route('/upload_employees', methods=['GET', 'POST'])
 def upload_employees():
@@ -221,7 +225,6 @@ def upload_employees():
                     
                     header = [str(h).strip().lower() if h is not None else '' for h in rows[0]]
                     
-                    # Safe column lookup with fallbacks
                     id_idx = header.index('employee_id') if 'employee_id' in header else (header.index('id') if 'id' in header else 0)
                     name_idx = header.index('full_name') if 'full_name' in header else (header.index('name') if 'name' in header else 1)
                     sector_idx = header.index('sector') if 'sector' in header else (header.index('department') if 'department' in header else 2)
@@ -262,6 +265,12 @@ def upload_employees():
                 return redirect(url_for('upload_employees'))
             
     return render_template('upload.html')
+
+@app.route('/qrlist')
+def qrlist():
+    if session.get('role') not in ['admin', 'superadmin']:
+        flash('Unauthorized access.', 'danger')
+        return redirect(url_for('login'))
         
     all_employees = Employee.query.all()
     output = io.StringIO()
