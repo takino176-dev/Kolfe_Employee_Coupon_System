@@ -3,89 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Merchant Management - Kolfe Coupon System</title>
+    <title>Merchant POS Portal - Kolfe Coupon System</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
         
         /* Navigation Bar */
         .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .navbar-brand { color: #ffffff; font-size: 22px; font-weight: 700; }
-        .nav-links { display: flex; gap: 12px; }
-        .nav-btn { text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; color: #f8fafc; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); transition: all 0.2s ease; }
-        .nav-btn:hover { background: rgba(255,255,255,0.25); color: #ffffff; }
+        .navbar-brand { color: #ffffff; font-size: 20px; font-weight: 700; }
+        .user-info { color: #cbd5e1; font-size: 14px; font-weight: 600; margin-right: 15px; }
+        .nav-btn { text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; color: #ffffff; background: #ef4444; border: none; transition: background 0.2s; }
+        .nav-btn:hover { background: #dc2626; }
 
         .container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
-        .header-box { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .header-title { font-size: 28px; font-weight: 800; color: #0f172a; }
+        .header-title { font-size: 26px; font-weight: 800; color: #0f172a; margin-bottom: 20px; }
 
-        .btn-add { text-decoration: none; padding: 10px 20px; background: linear-gradient(135deg, #16a34a, #15803d); color: #ffffff; font-weight: 700; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.2s; }
-        .btn-add:hover { transform: translateY(-2px); }
+        /* Metric Widget */
+        .metrics-grid { margin-bottom: 24px; }
+        .metric-card { background: #ffffff; padding: 22px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-top: 4px solid #16a34a; }
+        .metric-card h6 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 700; margin-bottom: 6px; }
+        .metric-card h3 { font-size: 32px; font-weight: 800; color: #15803d; }
 
-        .card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-        
+        /* Scanner & Redemption Card */
+        .card { background: #ffffff; padding: 28px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 28px; }
+        .card h4 { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 18px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 700; color: #475569; margin-bottom: 8px; font-size: 14px; }
+        .form-control { width: 100%; padding: 12px 16px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 16px; outline: none; transition: border-color 0.2s; }
+        .form-control:focus { border-color: #2563eb; }
+
+        .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #16a34a, #15803d); color: #ffffff; border: none; border-radius: 8px; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.3); transition: transform 0.2s, opacity 0.2s; }
+        .btn-submit:hover { opacity: 0.95; transform: translateY(-1px); }
+
+        /* Live Settlement Log Table */
         table { width: 100%; border-collapse: collapse; text-align: left; }
         th { background-color: #f8fafc; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
         td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #334155; }
         tr:hover { background-color: #f8fafc; }
 
-        .badge-merchant { background: #dcfce7; color: #15803d; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; display: inline-block; }
-        
-        .btn-delete { padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 700; border: none; cursor: pointer; background: linear-gradient(135deg, #ef4444, #dc2626); color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: opacity 0.2s; }
-        .btn-delete:hover { opacity: 0.9; }
-
-        .alert { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 600; background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        /* Flash Messages */
+        .alert { padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 700; font-size: 15px; }
+        .alert-success { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .alert-danger { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
     </style>
 </head>
 <body>
 
+    <!-- Navigation Header -->
     <nav class="navbar">
-        <div class="navbar-brand">🏢 Kolfe Employee Coupon System</div>
-        <div class="nav-links">
-            <a href="{{ url_for('admin_dashboard') }}" class="nav-btn">Dashboard</a>
-            <a href="{{ url_for('employees') }}" class="nav-btn">Employees</a>
-            <a href="{{ url_for('merchants') }}" class="nav-btn">Merchants</a>
-            <a href="{{ url_for('logout') }}" class="nav-btn" style="background:#ef4444; border:none;">Logout</a>
+        <div class="navbar-brand">🏪 Kolfe Merchant POS Portal</div>
+        <div>
+            <span class="user-info">Logged in: {{ session.get('username') }}</span>
+            <a href="{{ url_for('logout') }}" class="nav-btn">Logout</a>
         </div>
     </nav>
 
     <div class="container">
-        <div class="header-box">
-            <h2 class="header-title">Merchant Management</h2>
-            <a href="{{ url_for('create_merchant') }}" class="btn-add">➕ Add New Merchant</a>
-        </div>
+        <h2 class="header-title">Point of Sale Terminal</h2>
 
+        <!-- Flash Messages for Instant Balance Validation -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert">{{ message }}</div>
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }}">
+                        {{ message }}
+                    </div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
 
+        <!-- Total Collected Metric Widget -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <h6>Total Collected (This Month: {{ month }})</h6>
+                <h3>{{ "%.2f"|format(total_collected) }} ETB</h3>
+            </div>
+        </div>
+
+        <!-- Redemption Input Card -->
         <div class="card">
+            <h4>Redeem Employee Coupon</h4>
+            <form action="{{ url_for('merchant_scan') }}" method="POST">
+                
+                <!-- QR Token / Manual Token Entry -->
+                <div class="form-group">
+                    <label for="qr_token">Scan QR Code or Type Employee Token:</label>
+                    <input type="text" id="qr_token" name="qr_token" class="form-control" placeholder="e.g. AbC123XyzToken" required autofocus autocomplete="off">
+                </div>
+
+                <!-- Redemption Amount in ETB -->
+                <div class="form-group">
+                    <label for="amount">Transaction Amount (ETB):</label>
+                    <input type="number" step="0.01" min="0.01" id="amount" name="amount" class="form-control" placeholder="e.g. 150.00" required>
+                </div>
+
+                <!-- Action Button -->
+                <button type="submit" class="btn-submit">💳 Verify & Process Redemption</button>
+            </form>
+        </div>
+
+        <!-- Live Settlement Log Table -->
+        <div class="card">
+            <h4>Live Settlement History ({{ month }})</h4>
             <table>
                 <thead>
                     <tr>
-                        <th>Merchant Username</th>
-                        <th>Role Account</th>
-                        <th style="text-align: right;">Action</th>
+                        <th>Date & Time</th>
+                        <th>Reference Code</th>
+                        <th>Employee ID</th>
+                        <th>Amount Collected</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for merchant in merchants %}
+                    {% for t in transactions %}
                     <tr>
-                        <td style="font-weight: 700;">{{ merchant.username }}</td>
-                        <td><span class="badge-merchant">Merchant</span></td>
-                        <td style="text-align: right;">
-                            <form action="{{ url_for('delete_merchant', merchant_id=merchant.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Remove this merchant account permanently?');">
-                                <button type="submit" class="btn-delete">🗑️ Delete Access</button>
-                            </form>
-                        </td>
+                        <td>{{ t.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td><code>{{ t.reference }}</code></td>
+                        <td><strong>{{ t.employee.employee_id }}</strong> ({{ t.employee.full_name }})</td>
+                        <td style="font-weight: 800; color: #16a34a;">{{ "%.2f"|format(t.amount) }} ETB</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="3" style="text-align: center; color: #94a3b8; padding: 24px;">No merchants created yet. Click "+ Add New Merchant" above to create one!</td>
+                        <td colspan="4" style="text-align: center; color: #94a3b8; padding: 24px;">No transactions recorded for this month yet.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
