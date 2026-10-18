@@ -11,8 +11,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe-secret-key-2026')
 
-# SQLite Database setup for Render
-db_path = os.path.join('/tmp', 'coupon_system.db')
+# Use a new database version name so Render creates it fresh with all columns
+db_path = os.path.join('/tmp', 'coupon_system_v3.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -39,7 +39,7 @@ class Employee(db.Model):
 class CouponAllocation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
-    month = db.Column(db.String(20), nullable=False)  # e.g., '2026-10'
+    month = db.Column(db.String(20), nullable=False)
     amount = db.Column(db.Float, nullable=False, default=0.0)
 
 class Transaction(db.Model):
@@ -337,4 +337,47 @@ def merchant_dashboard():
     
     month = datetime.utcnow().strftime('%Y-%m')
     merchant_id = session.get('user_id')
-    transactions = Transaction
+    transactions = Transaction.query.filter_by(merchant_id=merchant_id, month=month).all()
+    total_collected = sum(t.amount for t in transactions)
+    
+    return render_template('merchant.html', transactions=transactions, total_collected=total_collected, month=month)
+
+@app.route('/merchant/scan', methods=['POST'])
+def merchant_scan():
+    if session.get('role') != 'merchant':
+        flash('Unauthorized.', 'danger')
+        return redirect(url_for('login'))
+    
+    qr_token = request.form.get('qr_token')
+    amount = float(request.form.get('amount', 0))
+    month = datetime.utcnow().strftime('%Y-%m')
+    
+    emp = Employee.query.filter_by(qr_token=qr_token).first()
+    if not emp:
+        flash('Invalid QR Code / Employee token.', 'danger')
+        return redirect(url_for('merchant_dashboard'))
+    
+    allocation = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
+    allocated_amt = allocation.amount if allocation else 0.0
+    
+    spent_amt = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all())
+    balance = allocated_amt - spent_aly = allocated_amt - spent_amt
+    
+    if amount > balance:
+        flash(f'Insufficient balance! Available balance is {balance:.2f}.', 'danger')
+        return redirect(url_for('merchant_dashboard'))
+    
+    tx = Transaction(
+        reference=secrets.token_hex(6).upper(),
+        employee_id=emp.id,
+        merchant_id=session.get('user_id'),
+        amount=amount,
+        month=month
+    )
+    db.session.add(tx)
+    db.session.commit()
+    flash(f'Successfully redeemed {amount:.2f} coupons for {emp.full_name}!', 'success')
+    return redirect(url_for('merchant_dashboard'))
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
