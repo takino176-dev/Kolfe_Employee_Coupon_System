@@ -4,14 +4,14 @@ import csv
 import io
 import openpyxl
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe-secret-key-2026')
 
-db_path = os.path.join('/tmp', 'coupon_system_v5.db')
+db_path = os.path.join('/tmp', 'coupon_system_v6.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -106,20 +106,17 @@ def admin_dashboard():
         flash('Unauthorized.', 'danger')
         return redirect(url_for('login'))
     
-    try:
-        month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
-        employees_count = Employee.query.count()
-        allocations = CouponAllocation.query.filter_by(month=month).all()
-        total_allocated = sum(a.amount for a in allocations)
-        transactions = Transaction.query.filter_by(month=month).all()
-        total_spent = sum(t.amount for t in transactions)
-        recent_transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
-        
-        return render_template('admin.html', month=month, employees=employees_count, 
-                               allocated=total_allocated, spent=total_spent, collected=total_spent, 
-                               transactions=recent_transactions)
-    except Exception as e:
-        return f"<h2 style='color:red; font-family:Arial;'>Dashboard Crash Error:</h2><pre>{str(e)}</pre>"
+    month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
+    employees_count = Employee.query.count()
+    allocations = CouponAllocation.query.filter_by(month=month).all()
+    total_allocated = sum(a.amount for a in allocations)
+    transactions = Transaction.query.filter_by(month=month).all()
+    total_spent = sum(t.amount for t in transactions)
+    recent_transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
+    
+    return render_template('admin.html', month=month, employees=employees_count, 
+                           allocated=total_allocated, spent=total_spent, collected=total_spent, 
+                           transactions=recent_transactions)
 
 @app.route('/employees')
 def employees():
@@ -175,6 +172,19 @@ def upload_employees():
 def print_cards():
     if session.get('role') != 'admin': return redirect(url_for('login'))
     return render_template('print_cards.html', employees=Employee.query.all())
+
+@app.route('/reports_csv')
+def reports_csv():
+    if session.get('role') != 'admin':
+        return redirect(url_for('login'))
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['ID', 'Reference', 'Amount', 'Date'])
+    for t in Transaction.query.all():
+        writer.writerow([t.id, t.reference, t.amount, t.created_at])
+    byte_output = io.BytesIO(output.getvalue().encode('utf-8'))
+    output.close()
+    return send_file(byte_output, mimetype='text/csv', download_name='transactions_report.csv', as_attachment=True)
 
 @app.route('/allocations', methods=['GET', 'POST'])
 def allocations():
