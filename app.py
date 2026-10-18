@@ -212,30 +212,30 @@ def upload_employees():
             filename = file.filename.lower()
             try:
                 if filename.endswith('.xlsx') or filename.endswith('.xls'):
-                    wb = openpyxl.load_workbook(file)
+                    wb = openpyxl.load_workbook(io.BytesIO(file.read()))
                     sheet = wb.active
                     rows = list(sheet.iter_rows(values_only=True))
-                    if not rows:
-                        flash('Uploaded file is empty.', 'danger')
+                    if not rows or len(rows) < 2:
+                        flash('Uploaded file is empty or missing data rows.', 'danger')
                         return redirect(url_for('upload_employees'))
                     
-                    # Assume first row is header
-                    header = [str(h).strip().lower() for h in rows[0]]
-                    # Map columns by name or index
-                    id_idx = header.index('employee_id') if 'employee_id' in header else 0
-                    name_idx = header.index('full_name') if 'full_name' in header else 1
-                    sector_idx = header.index('sector') if 'sector' in header else 2
+                    header = [str(h).strip().lower() if h is not None else '' for h in rows[0]]
+                    
+                    # Safe column lookup with fallbacks
+                    id_idx = header.index('employee_id') if 'employee_id' in header else (header.index('id') if 'id' in header else 0)
+                    name_idx = header.index('full_name') if 'full_name' in header else (header.index('name') if 'name' in header else 1)
+                    sector_idx = header.index('sector') if 'sector' in header else (header.index('department') if 'department' in header else 2)
 
                     for row in rows[1:]:
-                        if not row or not row[id_idx]:
+                        if not row or len(row) <= max(id_idx, name_idx, sector_idx):
                             continue
-                        emp_id = str(row[id_idx]).strip()
-                        if not Employee.query.filter_by(employee_id=emp_id).first():
+                        emp_id = str(row[id_idx]).strip() if row[id_idx] is not None else ''
+                        if emp_id and not Employee.query.filter_by(employee_id=emp_id).first():
                             qr_token = secrets.token_urlsafe(16)
                             emp = Employee(
                                 employee_id=emp_id,
-                                full_name=str(row[name_idx]).strip() if row[name_idx] else '',
-                                sector=str(row[sector_idx]).strip() if row[sector_idx] else '',
+                                full_name=str(row[name_idx]).strip() if row[name_idx] is not None else '',
+                                sector=str(row[sector_idx]).strip() if row[sector_idx] is not None else '',
                                 qr_token=qr_token
                             )
                             db.session.add(emp)
@@ -243,13 +243,13 @@ def upload_employees():
                     stream = io.TextIOWrapper(file.stream, encoding='utf-8')
                     reader = csv.DictReader(stream)
                     for row in reader:
-                        emp_id = row.get('employee_id')
+                        emp_id = row.get('employee_id') or row.get('id')
                         if emp_id and not Employee.query.filter_by(employee_id=emp_id).first():
                             qr_token = secrets.token_urlsafe(16)
                             emp = Employee(
-                                employee_id=emp_id,
-                                full_name=row.get('full_name', ''),
-                                sector=row.get('sector', ''),
+                                employee_id=str(emp_id).strip(),
+                                full_name=str(row.get('full_name') or row.get('name') or '').strip(),
+                                sector=str(row.get('sector') or row.get('department') or '').strip(),
                                 qr_token=qr_token
                             )
                             db.session.add(emp)
@@ -262,12 +262,6 @@ def upload_employees():
                 return redirect(url_for('upload_employees'))
             
     return render_template('upload.html')
-
-@app.route('/qrlist')
-def qrlist():
-    if session.get('role') not in ['admin', 'superadmin']:
-        flash('Unauthorized access.', 'danger')
-        return redirect(url_for('login'))
         
     all_employees = Employee.query.all()
     output = io.StringIO()
