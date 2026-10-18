@@ -139,15 +139,12 @@ def admin_dashboard():
     total_spent = sum(t.amount for t in transactions)
     recent_transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
 
-    # Calculate collection breakdown: Merchant -> Sector -> Amount
     merchant_sector_breakdown = {}
     for t in transactions:
         merchant_name = t.merchant_rel.username if t.merchant_rel else 'Unknown Merchant'
         sector_name = t.employee.sector if t.employee and t.employee.sector else 'Unassigned'
-        
         if merchant_name not in merchant_sector_breakdown:
             merchant_sector_breakdown[merchant_name] = {}
-        
         merchant_sector_breakdown[merchant_name][sector_name] = merchant_sector_breakdown[merchant_name].get(sector_name, 0.0) + t.amount
 
     ADMIN_HTML = """
@@ -194,9 +191,9 @@ def admin_dashboard():
             {% endwith %}
 
             <form method="GET" class="card" style="margin-bottom: 25px; display:flex; gap:15px; align-items:center;">
-                <label style="font-weight:700;">Select Month:</label>
+                <label style="font-weight:700;">Select Month (Ethiopian/Standard):</label>
                 <input type="text" name="month" value="{{ month }}" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
-                <button type="submit" class="btn btn-blue" style="padding:8px 16px;">Filter Data</button>
+                <button type="submit" class="btn btn-blue" style="padding:8px 16px;">Filter Month Data</button>
             </form>
 
             <div class="grid">
@@ -205,15 +202,15 @@ def admin_dashboard():
                     <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ employees }}</h3>
                 </div>
                 <div class="card" style="border-top: 4px solid #d97706;">
-                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Released Allocation</h6>
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Released Allocation ({{ month }})</h6>
                     <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(allocated) }} ETB</h3>
                 </div>
                 <div class="card" style="border-top: 4px solid #ef4444;">
-                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Total Spent</h6>
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Total Spent ({{ month }})</h6>
                     <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(spent) }} ETB</h3>
                 </div>
                 <div class="card" style="border-top: 4px solid #16a34a;">
-                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Merchant Collected</h6>
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Merchant Collected ({{ month }})</h6>
                     <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(spent) }} ETB</h3>
                 </div>
             </div>
@@ -226,11 +223,11 @@ def admin_dashboard():
                 <a href="{{ url_for('allocations') }}" class="btn" style="background:#b45309;">Release Allocations</a>
                 <a href="{{ url_for('print_cards') }}" class="btn btn-dark">Print QR Cards</a>
                 <a href="{{ url_for('qrlist') }}" class="btn btn-dark">Export QR List</a>
-                <a href="{{ url_for('reports_csv') }}" class="btn btn-red">Export Transactions</a>
+                <a href="{{ url_for('reports_csv') }}?month={{ month }}" class="btn btn-red">Export Monthly Sector Report (CSV)</a>
             </div>
 
             <div class="card" style="margin-bottom: 25px;">
-                <h3 style="margin-bottom: 15px; font-size:18px;">🛒 Collections by Merchant & Employee Sector ({{ month }})</h3>
+                <h3 style="margin-bottom: 15px; font-size:18px;">🛒 Collections by Merchant & Employee Sector (Month: {{ month }})</h3>
                 <table>
                     <thead>
                         <tr><th>Merchant Name</th><th>Employee Sector</th><th>Total Collected Amount</th></tr>
@@ -245,14 +242,14 @@ def admin_dashboard():
                             </tr>
                             {% endfor %}
                         {% else %}
-                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No merchant collection records found for this month.</td></tr>
+                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No merchant collection records found for this 30-day cycle.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
 
             <div class="card">
-                <h3 style="margin-bottom: 15px; font-size:18px;">Recent Transactions</h3>
+                <h3 style="margin-bottom: 15px; font-size:18px;">Recent Transactions ({{ month }})</h3>
                 <table>
                     <thead>
                         <tr><th>Date & Time</th><th>Reference</th><th>Merchant</th><th>Employee</th><th>Sector</th><th>Amount</th></tr>
@@ -268,7 +265,7 @@ def admin_dashboard():
                             <td style="font-weight:700; color:#ef4444;">-{{ "%.2f"|format(t.amount) }} ETB</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:20px;">No transactions recorded yet.</td></tr>
+                        <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:20px;">No transactions recorded for this month.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -521,13 +518,13 @@ def allocations():
                 alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
                 if alloc: alloc.amount = amount
                 else: db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
-            flash('Allocation released successfully to all employees!', 'success')
+            flash(f'Allocation released successfully to all employees for cycle {month}!', 'success')
         else:
             emp_id = request.form.get('employee_id')
             alloc = CouponAllocation.query.filter_by(employee_id=emp_id, month=month).first()
             if alloc: alloc.amount = amount
             else: db.session.add(CouponAllocation(employee_id=emp_id, month=month, amount=amount))
-            flash('Allocation released successfully for single employee!', 'success')
+            flash(f'Allocation released successfully for single employee for cycle {month}!', 'success')
         db.session.commit()
     return render_template('allocations.html', employees=all_emps, month=month)
 
@@ -558,14 +555,21 @@ def qrlist():
 @app.route('/reports_csv')
 def reports_csv():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
+    transactions = Transaction.query.filter_by(month=month).all()
+    
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', 'Reference', 'Amount', 'Date'])
-    for t in Transaction.query.all():
-        writer.writerow([t.id, t.reference, t.amount, t.created_at])
+    writer.writerow(['Month', 'Merchant Name', 'Employee Sector', 'Total Spent / Payable Amount (ETB)', 'Transaction Reference', 'Date'])
+    
+    for t in transactions:
+        merchant_name = t.merchant_rel.username if t.merchant_rel else 'Unknown Merchant'
+        sector_name = t.employee.sector if t.employee and t.employee.sector else 'Unassigned'
+        writer.writerow([t.month, merchant_name, sector_name, t.amount, t.reference, t.created_at.strftime('%Y-%m-%d %H:%M')])
+        
     byte_output = io.BytesIO(output.getvalue().encode('utf-8'))
     output.close()
-    return send_file(byte_output, mimetype='text/csv', download_name='transactions_report.csv', as_attachment=True)
+    return send_file(byte_output, mimetype='text/csv', download_name=f'merchant_sector_report_{month}.csv', as_attachment=True)
 
 # ================= EMPLOYEE PORTAL (EMBEDDED) =================
 
@@ -579,10 +583,13 @@ def employee_dashboard():
 
     emp = Employee.query.filter_by(user_id=user.id).first() or Employee.query.filter_by(employee_id=user.username).first()
     month = datetime.utcnow().strftime('%Y-%m')
+    
+    # Strictly 30-day active allocation lookup for the current month cycle
     alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first() if emp else None
     allocated = alloc.amount if alloc else 0.0
+    
     spent = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all()) if emp else 0.0
-    all_txs = Transaction.query.filter_by(employee_id=emp.id).order_by(Transaction.created_at.desc()).all() if emp else []
+    all_txs = Transaction.query.filter_by(employee_id=emp.id, month=month).order_by(Transaction.created_at.desc()).all() if emp else []
 
     EMP_HTML = """
     <!DOCTYPE html>
@@ -624,7 +631,7 @@ def employee_dashboard():
             {% endwith %}
             <div class="grid">
                 <div class="card" style="border-top: 4px solid #2563eb;">
-                    <h6 style="color:#64748b; font-size:12px; text-transform:uppercase;">Monthly Allocation</h6>
+                    <h6 style="color:#64748b; font-size:12px; text-transform:uppercase;">Current 30-Day Allocation ({{ month }})</h6>
                     <h3 style="font-size:24px; font-weight:800; color:#2563eb; margin-top:5px;">{{ "%.2f"|format(allocated) }} ETB</h3>
                 </div>
                 <div class="card" style="border-top: 4px solid #ef4444;">
@@ -637,14 +644,14 @@ def employee_dashboard():
                 </div>
             </div>
             <div class="card" style="margin-bottom: 25px;">
-                <h4 style="margin-bottom:10px;">Your Digital Coupon QR Card</h4>
+                <h4 style="margin-bottom:10px;">Your Digital Coupon QR Card (Active for Cycle: {{ month }})</h4>
                 <div class="qr-box">
                     <div id="qrcode"></div>
                     <p style="margin-top:10px; font-family:monospace; font-weight:700; color:#475569;">Token: {{ emp.qr_token if emp else 'N/A' }}</p>
                 </div>
             </div>
             <div class="card">
-                <h4 style="margin-bottom:15px;">Your Redemption History</h4>
+                <h4 style="margin-bottom:15px;">Your Monthly Redemption History</h4>
                 <table>
                     <thead><tr><th>Date & Time</th><th>Reference</th><th>Amount Redeemed</th></tr></thead>
                     <tbody>
@@ -655,7 +662,7 @@ def employee_dashboard():
                             <td style="font-weight:700; color:#ef4444;">-{{ "%.2f"|format(t.amount) }} ETB</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No redemptions yet.</td></tr>
+                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No redemptions for this monthly cycle.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -718,7 +725,7 @@ def merchant_scan():
     allocated = alloc.amount if alloc else 0.0
     spent = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all())
     if amount > (allocated - spent):
-        flash('Insufficient employee balance!', 'danger')
+        flash('Insufficient employee balance for this 30-day monthly cycle!', 'danger')
         return redirect(url_for('merchant_dashboard'))
     db.session.add(Transaction(reference=secrets.token_hex(6).upper(), employee_id=emp.id, merchant_id=session.get('user_id'), amount=amount, month=month))
     db.session.commit()
