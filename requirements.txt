@@ -1,4 +1,5 @@
-Flask
-Flask-SQLAlchemy
-Werkzeug
-openpyxl
+Flask==3.1.3
+Flask-SQLAlchemy==3.1.1
+Werkzeug==3.1.9
+openpyxl==3.1.5
+gunicorn
