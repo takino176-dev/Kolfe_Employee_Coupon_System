@@ -11,7 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe-secret-key-2026')
 
-# SQLite Database setup
+# SQLite Database setup for Render
 db_path = os.path.join('/tmp', 'coupon_system.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -34,6 +34,7 @@ class Employee(db.Model):
     qr_token = db.Column(db.String(100), unique=True, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     user = db.relationship('User', backref='employee_profile', uselist=False)
+    transactions = db.relationship('Transaction', backref='employee', cascade='all, delete-orphan', lazy=True)
 
 class CouponAllocation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -44,13 +45,12 @@ class CouponAllocation(db.Model):
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     reference = db.Column(db.String(100), unique=True, nullable=False)
-    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False)
     merchant_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     month = db.Column(db.String(20), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    employee_rel = db.relationship('Employee', backref='transactions')
     merchant_rel = db.relationship('User', backref='merchant_transactions')
 
 with app.app_context():
@@ -188,37 +188,39 @@ def upload_employees():
                         flash('File is empty.', 'danger')
                         return redirect(url_for('upload_employees'))
                     header = [str(h).strip().lower() if h else '' for h in rows[0]]
-                    id_i = header.index('employee_id') if 'employee_id' in header else 0
-                    name_i = header.index('full_name') if 'full_name' in header else 1
-                    sec_i = header.index('sector') if 'sector' in header else 2
+                    id_i = header.index('employee_id') if 'employee_id' in header else (header.index('id') if 'id' in header else 0)
+                    name_i = header.index('full_name') if 'full_name' in header else (header.index('name') if 'name' in header else 1)
+                    sec_i = header.index('sector') if 'sector' in header else (header.index('department') if 'department' in header else 2)
                     
                     for row in rows[1:]:
-                        if not row or not row[id_i]: continue
-                        e_id = str(row[id_i]).strip()
-                        if not Employee.query.filter_by(employee_id=e_id).first():
+                        if not row or len(row) <= max(id_i, name_i, sec_i): continue
+                        e_id = str(row[id_i]).strip() if row[id_i] is not None else ''
+                        if e_id and not Employee.query.filter_by(employee_id=e_id).first():
                             u = User(username=e_id, password=generate_password_hash(e_id), role='employee')
                             db.session.add(u)
                             db.session.flush()
-                            emp = Employee(employee_id=e_id, full_name=str(row[name_i]).strip(), 
-                                           sector=str(row[sec_i]).strip(), qr_token=secrets.token_urlsafe(16), user_id=u.id)
+                            emp = Employee(employee_id=e_id, full_name=str(row[name_i]).strip() if row[name_i] is not None else '', 
+                                           sector=str(row[sec_i]).strip() if row[sec_i] is not None else '', qr_token=secrets.token_urlsafe(16), user_id=u.id)
                             db.session.add(emp)
                 else:
                     stream = io.TextIOWrapper(file.stream, encoding='utf-8')
                     reader = csv.DictReader(stream)
                     for row in reader:
                         e_id = row.get('employee_id') or row.get('id')
-                        if e_id and not Employee.query.filter_by(employee_id=e_id).strip():
-                            u = User(username=e_id, password=generate_password_hash(e_id), role='employee')
-                            db.session.add(u)
-                            db.session.flush()
-                            emp = Employee(employee_id=str(e_id).strip(), full_name=row.get('full_name', ''), 
-                                           sector=row.get('sector', ''), qr_token=secrets.token_urlsafe(16), user_id=u.id)
-                            db.session.add(emp)
+                        if e_id:
+                            clean_id = str(e_id).strip()
+                            if clean_id and not Employee.query.filter_by(employee_id=clean_id).first():
+                                u = User(username=clean_id, password=generate_password_hash(clean_id), role='employee')
+                                db.session.add(u)
+                                db.session.flush()
+                                emp = Employee(employee_id=clean_id, full_name=str(row.get('full_name') or row.get('name') or '').strip(), 
+                                               sector=str(row.get('sector') or row.get('department') or '').strip(), qr_token=secrets.token_urlsafe(16), user_id=u.id)
+                                db.session.add(emp)
                 db.session.commit()
                 flash('Bulk upload successful! Default password is Employee ID.', 'success')
                 return redirect(url_for('employees'))
             except Exception as e:
-                flash(f'Error: {str(e)}', 'danger')
+                flash(f'Error processing file: {str(e)}', 'danger')
         return redirect(url_for('upload_employees'))
     return render_template('upload.html')
 
@@ -248,7 +250,7 @@ def allocations():
                     db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
             flash(f'Allocated {amount} coupons to ALL employees for {month}.', 'success')
         else:
-            alloc = CouponAllocation.query.filter_by(employee_id=emp_id, month=month).first()
+            alloc = CouponAllocation.query.filter_by(employee_id=int(emp_id), month=month).first()
             if alloc:
                 alloc.amount = amount
             else:
@@ -335,47 +337,4 @@ def merchant_dashboard():
     
     month = datetime.utcnow().strftime('%Y-%m')
     merchant_id = session.get('user_id')
-    transactions = Transaction.query.filter_by(merchant_id=merchant_id, month=month).all()
-    total_collected = sum(t.amount for t in transactions)
-    
-    return render_template('merchant.html', transactions=transactions, total_collected=total_collected, month=month)
-
-@app.route('/merchant/scan', methods=['POST'])
-def merchant_scan():
-    if session.get('role') != 'merchant':
-        flash('Unauthorized.', 'danger')
-        return redirect(url_for('login'))
-    
-    qr_token = request.form.get('qr_token')
-    amount = float(request.form.get('amount', 0))
-    month = datetime.utcnow().strftime('%Y-%m')
-    
-    emp = Employee.query.filter_by(qr_token=qr_token).first()
-    if not emp:
-        flash('Invalid QR Code / Employee token.', 'danger')
-        return redirect(url_for('merchant_dashboard'))
-    
-    allocation = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
-    allocated_amt = allocation.amount if allocation else 0.0
-    
-    spent_amt = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all())
-    balance = allocated_amt - spent_amt
-    
-    if amount > balance:
-        flash(f'Insufficient balance! Available balance is {balance:.2f}.', 'danger')
-        return redirect(url_for('merchant_dashboard'))
-    
-    tx = Transaction(
-        reference=secrets.token_hex(6).upper(),
-        employee_id=emp.id,
-        merchant_id=session.get('user_id'),
-        amount=amount,
-        month=month
-    )
-    db.session.add(tx)
-    db.session.commit()
-    flash(f'Successfully redeemed {amount:.2f} coupons for {emp.full_name}!', 'success')
-    return redirect(url_for('merchant_dashboard'))
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    transactions = Transaction
