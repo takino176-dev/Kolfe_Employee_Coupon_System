@@ -23,7 +23,7 @@ db = SQLAlchemy(app)
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
+    password = db.Column(db.String(200), nullable=True)  # Allowed nullable for password-free initial setup
     role = db.Column(db.String(20), nullable=False)
     is_first_login = db.Column(db.Boolean, default=True)
 
@@ -60,7 +60,7 @@ with app.app_context():
 def handle_exception(e):
     return f"<h2 style='color:red; font-family:Arial;'>Application Error:</h2><pre>{str(e)}</pre>", 500
 
-# ================= AUTHENTICATION & SECURITY =================
+# ================= AUTHENTICATION =================
 
 @app.route('/')
 def index():
@@ -91,23 +91,33 @@ def setup():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        
         user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password, password):
-            session['user_id'] = user.id
-            session['username'] = user.username
-            session['role'] = user.role
-            
-            if user.role == 'employee' and getattr(user, 'is_first_login', True):
-                flash('First login detected! Please set a new password to continue.', 'warning')
+        if user:
+            # First-time login for employees bypasses password check
+            if user.role == 'employee' and user.is_first_login:
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session['role'] = user.role
+                flash('Welcome! As a new employee, please create a password for your account.', 'info')
                 return redirect(url_for('employee_change_password'))
 
-            flash('Logged in successfully.', 'success')
-            if user.role in ['admin', 'superadmin']: return redirect(url_for('admin_dashboard'))
-            elif user.role == 'merchant': return redirect(url_for('merchant_dashboard'))
-            elif user.role == 'employee': return redirect(url_for('employee_dashboard'))
-        flash('Invalid username or password.', 'danger')
+            # Regular authentication with password check
+            if user.password and check_password_hash(user.password, password):
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session['role'] = user.role
+                flash('Logged in successfully.', 'success')
+                if user.role in ['admin', 'superadmin']: return redirect(url_for('admin_dashboard'))
+                elif user.role == 'merchant': return redirect(url_for('merchant_dashboard'))
+                elif user.role == 'employee': return redirect(url_for('employee_dashboard'))
+            else:
+                flash('Invalid password for this account.', 'danger')
+        else:
+            flash('Invalid username or Employee ID.', 'danger')
+
     return render_template('login.html')
 
 @app.route('/logout')
@@ -158,19 +168,26 @@ def employees():
 def add_employee():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     if request.method == 'POST':
-        emp_id = request.form.get('employee_id')
+        emp_id = request.form.get('employee_id').strip()
         full_name = request.form.get('full_name')
         sector = request.form.get('sector')
-        if Employee.query.filter_by(employee_id=emp_id).first():
-            flash('ID exists.', 'danger')
-            return redirect(url_for('add_employee'))
-        u = User(username=emp_id, password=generate_password_hash(emp_id), role='employee', is_first_login=True)
-        db.session.add(u)
-        db.session.flush()
-        emp = Employee(employee_id=emp_id, full_name=full_name, sector=sector, qr_token=secrets.token_urlsafe(16), user_id=u.id)
-        db.session.add(emp)
+        
+        u = User.query.filter_by(username=emp_id).first()
+        if not u:
+            u = User(username=emp_id, password=None, role='employee', is_first_login=True)
+            db.session.add(u)
+            db.session.flush()
+
+        emp = Employee.query.filter_by(employee_id=emp_id).first()
+        if emp:
+            emp.full_name = full_name
+            emp.sector = sector
+            emp.user_id = u.id
+        else:
+            db.session.add(Employee(employee_id=emp_id, full_name=full_name, sector=sector, qr_token=secrets.token_urlsafe(16), user_id=u.id))
+
         db.session.commit()
-        flash('Employee added successfully!', 'success')
+        flash('Employee added successfully! They can log in with their Employee ID.', 'success')
         return redirect(url_for('employees'))
     return render_template('employee_form.html')
 
@@ -194,13 +211,13 @@ def reset_password(employee_id):
     if emp.user_id:
         u = User.query.get(emp.user_id)
         if u:
-            u.password = generate_password_hash(request.form.get('new_password'))
+            u.password = None
             u.is_first_login = True
             db.session.commit()
-            flash('Employee password reset successfully!', 'success')
+            flash('Employee password reset! They can log in again without a password.', 'success')
     return redirect(url_for('employees'))
 
-# ================= MERCHANT MANAGEMENT (INLINE TEMPLATE) =================
+# ================= MERCHANTS MANAGEMENT =================
 
 @app.route('/merchants')
 def merchants():
@@ -298,7 +315,7 @@ def merchants():
 def create_merchant():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     if request.method == 'POST':
-        username = request.form.get('username')
+        username = request.form.get('username').strip()
         password = request.form.get('password')
         if User.query.filter_by(username=username).first():
             flash('Merchant username already exists.', 'danger')
@@ -335,10 +352,13 @@ def upload_employees():
                     for row in excel_rows[1:]:
                         if row and row[0]:
                             e_id = str(row[0]).strip()
-                            if e_id and not Employee.query.filter_by(employee_id=e_id).first():
-                                u = User(username=e_id, password=generate_password_hash(e_id), role='employee', is_first_login=True)
+                            u = User.query.filter_by(username=e_id).first()
+                            if not u:
+                                u = User(username=e_id, password=None, role='employee', is_first_login=True)
                                 db.session.add(u)
                                 db.session.flush()
+                            emp = Employee.query.filter_by(employee_id=e_id).first()
+                            if not emp:
                                 db.session.add(Employee(employee_id=e_id, full_name=str(row[1] or ''), sector=str(row[2] or ''), qr_token=secrets.token_urlsafe(16), user_id=u.id))
                 else:
                     stream = io.TextIOWrapper(io.BytesIO(file_bytes), encoding='utf-8')
@@ -347,10 +367,13 @@ def upload_employees():
                     for row in csv_reader:
                         if row and row[0]:
                             e_id = str(row[0]).strip()
-                            if e_id and not Employee.query.filter_by(employee_id=e_id).first():
-                                u = User(username=e_id, password=generate_password_hash(e_id), role='employee', is_first_login=True)
+                            u = User.query.filter_by(username=e_id).first()
+                            if not u:
+                                u = User(username=e_id, password=None, role='employee', is_first_login=True)
                                 db.session.add(u)
                                 db.session.flush()
+                            emp = Employee.query.filter_by(employee_id=e_id).first()
+                            if not emp:
                                 db.session.add(Employee(employee_id=e_id, full_name=str(row[1] if len(row) > 1 else ''), sector=str(row[2] if len(row) > 2 else ''), qr_token=secrets.token_urlsafe(16), user_id=u.id))
                 db.session.commit()
                 flash('Employees uploaded successfully!', 'success')
@@ -406,7 +429,6 @@ def qrlist():
     output.close()
     return send_file(byte_output, mimetype='text/csv', download_name='employee_qr_list.csv', as_attachment=True)
 
-@app.route('/reports')
 @app.route('/reports_csv')
 def reports_csv():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
@@ -426,33 +448,30 @@ def employee_dashboard():
     if session.get('role') != 'employee': return redirect(url_for('login'))
     user = User.query.get(session.get('user_id'))
     
-    emp = Employee.query.filter_by(user_id=user.id).first()
-    if not emp:
-        emp = Employee.query.filter_by(employee_id=user.username).first()
+    if user.is_first_login:
+        flash('Please create a password for your account first.', 'warning')
+        return redirect(url_for('employee_change_password'))
 
+    emp = Employee.query.filter_by(user_id=user.id).first() or Employee.query.filter_by(employee_id=user.username).first()
     month = datetime.utcnow().strftime('%Y-%m')
     alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first() if emp else None
     allocated = alloc.amount if alloc else 0.0
-    
-    txs = Transaction.query.filter_by(employee_id=emp.id, month=month).all() if emp else []
-    spent = sum(t.amount for t in txs)
-    balance = allocated - spent
-
+    spent = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all()) if emp else 0.0
     all_txs = Transaction.query.filter_by(employee_id=emp.id).order_by(Transaction.created_at.desc()).all() if emp else []
 
-    return render_template('employee_dashboard.html', user=user, emp=emp, allocated=allocated, spent=spent, balance=balance, transactions=all_txs, month=month)
+    return render_template('employee_dashboard.html', user=user, emp=emp, allocated=allocated, spent=spent, balance=allocated-spent, transactions=all_txs, month=month)
 
 @app.route('/employee/change_password', methods=['GET', 'POST'])
 def employee_change_password():
     if session.get('role') != 'employee': return redirect(url_for('login'))
     if request.method == 'POST':
-        new_password = request.form.get('new_password')
         user = User.query.get(session.get('user_id'))
+        new_password = request.form.get('new_password')
         if user and new_password:
             user.password = generate_password_hash(new_password)
             user.is_first_login = False
             db.session.commit()
-            flash('Password updated successfully! You can now access your portal.', 'success')
+            flash('Password set successfully! Welcome to your dashboard.', 'success')
             return redirect(url_for('employee_dashboard'))
     return render_template('employee_password.html')
 
@@ -467,8 +486,8 @@ def merchant_dashboard():
 
 @app.route('/merchant/scan', methods=['POST'])
 def merchant_scan():
-    if session.get('role') != 'merchant': return redirect(url_for('login'))
-    token = request.form.get('qr_token')
+    if session.get('role') != 'merchant': return redirect(url_for('merchant_dashboard'))
+    token = request.form.get('qr_token', '').strip()
     amount = float(request.form.get('amount', 0))
     month = datetime.utcnow().strftime('%Y-%m')
     emp = Employee.query.filter_by(qr_token=token).first()

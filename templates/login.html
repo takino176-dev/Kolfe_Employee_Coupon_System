@@ -2,49 +2,54 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Sign in - Kolfe Employee Coupon</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Kolfe Coupon System</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f9; padding: 40px; margin: 0; }
-        .card { max-width: 400px; background: #fff; padding: 30px; margin: 60px auto; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h2 { margin-bottom: 20px; color: #333; text-align: center; }
-        .form-group { margin-bottom: 15px; text-align: left; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; color: #444; }
-        input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; }
-        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .setup-link { display: block; margin-top: 20px; text-align: center; text-decoration: none; color: #007bff; font-size: 13px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f1f5f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .login-card { background: #ffffff; padding: 36px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); width: 100%; max-width: 400px; }
+        .login-card h2 { text-align: center; color: #0f172a; font-weight: 800; margin-bottom: 24px; font-size: 24px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 700; color: #475569; margin-bottom: 8px; font-size: 14px; }
+        .form-control { width: 100%; padding: 12px 16px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.2s; }
+        .form-control:focus { border-color: #2563eb; }
+        .btn-primary { width: 100%; padding: 14px; background: #2563eb; color: #ffffff; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; font-weight: 600; text-align: center; }
+        .alert-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+        .alert-info { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+        .alert-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .alert-warning { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+        .help-text { text-align: center; font-size: 13px; color: #64748b; margin-top: 15px; }
     </style>
 </head>
 <body>
+    <div class="login-card">
+        <h2>Kolfe Coupon System</h2>
 
-<div class="card">
-    <h2>Sign in</h2>
-    
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div style="padding: 12px; margin-bottom: 15px; background: {% if category == 'danger' %}#f8d7da{% else %}#d4edda{% endif %}; color: {% if category == 'danger' %}#721c24{% else %}#155724{% endif %}; border-radius: 4px; font-size: 14px;">
-            {{ message }}
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
-    <form method="POST">
-        <div class="form-group">
-            <label>Username</label>
-            <input type="text" name="username" required>
-        </div>
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label>Password</label>
-            <input type="password" name="password" required>
-        </div>
-        <button type="submit">Sign in</button>
-    </form>
-    
-    <a href="{{ url_for('setup') }}" class="setup-link">First setup: open /setup before creating users.</a>
-</div>
+        <form action="{{ url_for('login') }}" method="POST">
+            <div class="form-group">
+                <label for="username">Employee ID / Username:</label>
+                <input type="text" id="username" name="username" class="form-control" placeholder="e.g. emp-0001" required autofocus>
+            </div>
 
+            <div class="form-group">
+                <label for="password">Password (Leave blank for first login):</label>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Enter password (if set)">
+            </div>
+
+            <button type="submit" class="btn-primary">Sign In</button>
+        </form>
+
+        <p class="help-text">First time logging in? Enter your Employee ID and click Sign In.</p>
+    </div>
 </body>
 </html>
