@@ -2,29 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Kolfe Employee Coupon</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css">
     <style>
         body { background-color: #f8f9fa; font-family: Arial, sans-serif; }
-        .navbar { background-color: #343a40; color: white; padding: 10px 20px; }
-        .card { border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .quick-actions a { margin-right: 10px; margin-bottom: 10px; }
+        .navbar { background-color: #1e293b; padding: 12px 24px; }
+        .card { border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .btn-action { margin-right: 8px; margin-bottom: 8px; border-radius: 8px; font-weight: 500; }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-dark d-flex justify-content-between align-items-center">
-        <span class="navbar-brand mb-0 h1">Kolfe Employee Coupon System</span>
+        <span class="navbar-brand mb-0 h1 fw-bold">Kolfe Employee Coupon System</span>
         <div>
-            <a href="{{ url_for('admin_dashboard') }}" class="text-white text-decoration-none me-3">Dashboard</a>
-            <a href="{{ url_for('employees') }}" class="text-white text-decoration-none me-3">Employees</a>
-            <a href="{{ url_for('create_merchant') }}" class="text-white text-decoration-none me-3">Add Merchant</a>
-            <a href="{{ url_for('reports_csv') }}" class="text-white text-decoration-none me-3">Export Transactions</a>
-            <a href="{{ url_for('logout') }}" class="text-danger text-decoration-none fw-bold">Logout</a>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
+            <a href="{{ url_for('employees') }}" class="btn btn-outline-light btn-sm me-2">Employees</a>
+            <a href="{{ url_for('merchants') }}" class="btn btn-outline-light btn-sm me-2">Merchants</a>
+            <a href="{{ url_for('admin_change_password') }}" class="btn btn-outline-warning btn-sm me-2">Password</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm fw-bold">Logout</a>
         </div>
     </nav>
 
     <div class="container my-5">
-        <h2 class="mb-4">Admin Dashboard</h2>
+        <h2 class="fw-bold mb-4">Admin Dashboard</h2>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -46,55 +47,55 @@
                     <input type="text" name="month" class="form-control" value="{{ month }}" placeholder="YYYY-MM">
                 </div>
                 <div class="col-auto">
-                    <button type="submit" class="btn btn-primary">View</button>
+                    <button type="submit" class="btn btn-primary px-4">View</button>
                 </div>
             </form>
         </div>
 
-        <div class="row text-center mb-4">
+        <div class="row text-center mb-4 g-3">
             <div class="col-md-3">
                 <div class="card p-3 bg-white">
-                    <h6 class="text-muted">Total Employees</h6>
-                    <h3>{{ employees }}</h3>
+                    <h6 class="text-muted fw-normal">Total Employees</h6>
+                    <h3 class="fw-bold text-dark mb-0">{{ employees }}</h3>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card p-3 bg-white">
-                    <h6 class="text-muted">Released Allocation</h6>
-                    <h3>{{ "%.2f"|format(allocated) }} ETB</h3>
+                    <h6 class="text-muted fw-normal">Released Allocation</h6>
+                    <h3 class="fw-bold text-primary mb-0">{{ "%.2f"|format(allocated) }} ETB</h3>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card p-3 bg-white">
-                    <h6 class="text-muted">Total Spent</h6>
-                    <h3>{{ "%.2f"|format(spent) }} ETB</h3>
+                    <h6 class="text-muted fw-normal">Total Spent</h6>
+                    <h3 class="fw-bold text-danger mb-0">{{ "%.2f"|format(spent) }} ETB</h3>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="card p-3 bg-white">
-                    <h6 class="text-muted">Merchant Collected</h6>
-                    <h3>{{ "%.2f"|format(collected) }} ETB</h3>
+                    <h6 class="text-muted fw-normal">Merchant Collected</h6>
+                    <h3 class="fw-bold text-success mb-0">{{ "%.2f"|format(collected) }} ETB</h3>
                 </div>
             </div>
         </div>
 
         <div class="card p-4 mb-4">
-            <h4 class="mb-3">Quick Actions</h4>
-            <div class="quick-actions d-flex flex-wrap">
-                <a href="{{ url_for('add_employee') }}" class="btn btn-primary">+ Add Employee</a>
-                <a href="{{ url_for('create_merchant') }}" class="btn btn-success">+ Add Merchant</a>
-                <a href="{{ url_for('upload_employees') }}" class="btn btn-info text-white">Bulk Excel Upload</a>
-                <a href="{{ url_for('allocations') }}" class="btn btn-warning text-dark fw-bold">Release Allocations</a>
-                <a href="{{ url_for('print_cards') }}" class="btn btn-secondary">Print QR Cards</a>
-                <a href="{{ url_for('qrlist') }}" class="btn btn-dark">Export QR List</a>
-                <a href="{{ url_for('reports_csv') }}" class="btn btn-danger">Export Transactions</a>
+            <h4 class="fw-bold mb-3">Quick Actions</h4>
+            <div class="d-flex flex-wrap">
+                <a href="{{ url_for('add_employee') }}" class="btn btn-primary btn-action">+ Add Employee</a>
+                <a href="{{ url_for('create_merchant') }}" class="btn btn-success btn-action">+ Add Merchant</a>
+                <a href="{{ url_for('upload_employees') }}" class="btn btn-info text-white btn-action">Bulk Excel Upload</a>
+                <a href="{{ url_for('allocations') }}" class="btn btn-warning text-dark btn-action">Release Allocations</a>
+                <a href="{{ url_for('print_cards') }}" class="btn btn-secondary btn-action">Print QR Cards</a>
+                <a href="{{ url_for('qrlist') }}" class="btn btn-dark btn-action">Export QR List</a>
+                <a href="{{ url_for('reports_csv') }}" class="btn btn-danger btn-action">Export Transactions</a>
             </div>
         </div>
 
         <div class="card p-4">
-            <h4 class="mb-3">Recent Payments</h4>
-            <table class="table table-striped">
-                <thead>
+            <h4 class="fw-bold mb-3">Recent Payments</h4>
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
                     <tr>
                         <th>Date (UTC)</th>
                         <th>Reference</th>
@@ -107,14 +108,14 @@
                     {% for t in transactions %}
                     <tr>
                         <td>{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                        <td>{{ t.reference }}</td>
+                        <td><code>{{ t.reference }}</code></td>
                         <td>{{ t.employee.full_name }}</td>
                         <td>{{ t.employee.sector }}</td>
-                        <td>{{ "%.2f"|format(t.amount) }} ETB</td>
+                        <td class="fw-bold text-success">{{ "%.2f"|format(t.amount) }} ETB</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted">No payments yet.</td>
+                        <td colspan="5" class="text-center text-muted py-3">No payments yet.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
