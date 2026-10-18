@@ -78,7 +78,7 @@ def setup():
     if User.query.filter_by(role='admin').first():
         return redirect(url_for('login'))
     if request.method == 'POST':
-        username = request.form.get('username')
+        username = request.form.get('username', '').strip()
         password = request.form.get('password')
         if username and password:
             admin = User(username=username, password=generate_password_hash(password), role='admin', is_first_login=False)
@@ -96,7 +96,6 @@ def login():
         
         user = User.query.filter_by(username=username).first()
         if user:
-            # PASSWORD-FREE FIRST LOGIN FOR EMPLOYEES
             if user.role == 'employee' and user.is_first_login:
                 session['user_id'] = user.id
                 session['username'] = user.username
@@ -104,7 +103,6 @@ def login():
                 flash('First login detected! Please set your new personal password.', 'info')
                 return redirect(url_for('employee_change_password'))
 
-            # REGULAR PASSWORD CHECK
             if user.password and check_password_hash(user.password, password):
                 session['user_id'] = user.id
                 session['username'] = user.username
@@ -140,9 +138,148 @@ def admin_dashboard():
     transactions = Transaction.query.filter_by(month=month).all()
     total_spent = sum(t.amount for t in transactions)
     recent_transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
-    return render_template('admin.html', month=month, employees=employees_count, 
-                           allocated=total_allocated, spent=total_spent, collected=total_spent, 
-                           transactions=recent_transactions)
+
+    # Calculate collection breakdown: Merchant -> Sector -> Amount
+    merchant_sector_breakdown = {}
+    for t in transactions:
+        merchant_name = t.merchant_rel.username if t.merchant_rel else 'Unknown Merchant'
+        sector_name = t.employee.sector if t.employee and t.employee.sector else 'Unassigned'
+        
+        if merchant_name not in merchant_sector_breakdown:
+            merchant_sector_breakdown[merchant_name] = {}
+        
+        merchant_sector_breakdown[merchant_name][sector_name] = merchant_sector_breakdown[merchant_name].get(sector_name, 0.0) + t.amount
+
+    ADMIN_HTML = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Admin Dashboard - Kolfe Coupon System</title>
+        <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+            body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
+            .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; color: #fff; }
+            .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 25px; }
+            .card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+            .actions-bar { background: #ffffff; padding: 20px; border-radius: 12px; margin-bottom: 25px; display: flex; flex-wrap: wrap; gap: 10px; }
+            .btn { text-decoration: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; font-size: 14px; color: #fff; border: none; cursor: pointer; display: inline-block; }
+            .btn-blue { background: #2563eb; }
+            .btn-green { background: #16a34a; }
+            .btn-dark { background: #475569; }
+            .btn-red { background: #dc2626; }
+            table { width: 100%; border-collapse: collapse; text-align: left; background: #fff; border-radius: 12px; overflow: hidden; margin-bottom: 25px; }
+            th { background-color: #f8fafc; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
+            td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+            .alert { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 700; background-color: #dcfce7; color: #15803d; }
+        </style>
+    </head>
+    <body>
+        <nav class="navbar">
+            <h2>👑 Admin Control Dashboard</h2>
+            <div>
+                <a href="{{ url_for('admin_change_password') }}" style="color:#38bdf8; text-decoration:none; margin-right:15px; font-weight:600;">🔐 Change Password</a>
+                <a href="{{ url_for('logout') }}" class="btn btn-red" style="padding:6px 12px;">Logout</a>
+            </div>
+        </nav>
+
+        <div class="container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="GET" class="card" style="margin-bottom: 25px; display:flex; gap:15px; align-items:center;">
+                <label style="font-weight:700;">Select Month:</label>
+                <input type="text" name="month" value="{{ month }}" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+                <button type="submit" class="btn btn-blue" style="padding:8px 16px;">Filter Data</button>
+            </form>
+
+            <div class="grid">
+                <div class="card" style="border-top: 4px solid #2563eb;">
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Total Employees</h6>
+                    <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ employees }}</h3>
+                </div>
+                <div class="card" style="border-top: 4px solid #d97706;">
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Released Allocation</h6>
+                    <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(allocated) }} ETB</h3>
+                </div>
+                <div class="card" style="border-top: 4px solid #ef4444;">
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Total Spent</h6>
+                    <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(spent) }} ETB</h3>
+                </div>
+                <div class="card" style="border-top: 4px solid #16a34a;">
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Merchant Collected</h6>
+                    <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(spent) }} ETB</h3>
+                </div>
+            </div>
+
+            <div class="actions-bar">
+                <a href="{{ url_for('add_employee') }}" class="btn btn-blue">+ Add Employee</a>
+                <a href="{{ url_for('employees') }}" class="btn btn-dark">Manage Employees</a>
+                <a href="{{ url_for('merchants') }}" class="btn btn-green">Manage Merchants</a>
+                <a href="{{ url_for('upload_employees') }}" class="btn btn-dark">Bulk Excel Upload</a>
+                <a href="{{ url_for('allocations') }}" class="btn" style="background:#b45309;">Release Allocations</a>
+                <a href="{{ url_for('print_cards') }}" class="btn btn-dark">Print QR Cards</a>
+                <a href="{{ url_for('qrlist') }}" class="btn btn-dark">Export QR List</a>
+                <a href="{{ url_for('reports_csv') }}" class="btn btn-red">Export Transactions</a>
+            </div>
+
+            <div class="card" style="margin-bottom: 25px;">
+                <h3 style="margin-bottom: 15px; font-size:18px;">🛒 Collections by Merchant & Employee Sector ({{ month }})</h3>
+                <table>
+                    <thead>
+                        <tr><th>Merchant Name</th><th>Employee Sector</th><th>Total Collected Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for merchant, sectors in merchant_sector_breakdown.items() %}
+                            {% for sector, amount in sectors.items() %}
+                            <tr>
+                                <td style="font-weight:700; color:#2563eb;">{{ merchant }}</td>
+                                <td style="font-weight:600;">{{ sector }}</td>
+                                <td style="font-weight:700; color:#16a34a;">{{ "%.2f"|format(amount) }} ETB</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No merchant collection records found for this month.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 15px; font-size:18px;">Recent Transactions</h3>
+                <table>
+                    <thead>
+                        <tr><th>Date & Time</th><th>Reference</th><th>Merchant</th><th>Employee</th><th>Sector</th><th>Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for t in transactions %}
+                        <tr>
+                            <td>{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td><code>{{ t.reference }}</code></td>
+                            <td style="font-weight:600;">{{ t.merchant_rel.username if t.merchant_rel else 'N/A' }}</td>
+                            <td>{{ t.employee.full_name if t.employee else 'N/A' }}</td>
+                            <td>{{ t.employee.sector if t.employee else 'N/A' }}</td>
+                            <td style="font-weight:700; color:#ef4444;">-{{ "%.2f"|format(t.amount) }} ETB</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:20px;">No transactions recorded yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(ADMIN_HTML, month=month, employees=employees_count, 
+                           allocated=total_allocated, spent=total_spent, 
+                           merchant_sector_breakdown=merchant_sector_breakdown, transactions=recent_transactions)
 
 @app.route('/admin/change_password', methods=['GET', 'POST'])
 def admin_change_password():
@@ -186,7 +323,7 @@ def add_employee():
             db.session.add(Employee(employee_id=emp_id, full_name=full_name, sector=sector, qr_token=secrets.token_urlsafe(16), user_id=u.id))
 
         db.session.commit()
-        flash(f'Employee {full_name} added! They can log in using Employee ID: {emp_id}', 'success')
+        flash(f'Employee {full_name} added successfully!', 'success')
         return redirect(url_for('employees'))
     return render_template('employee_form.html')
 
@@ -216,16 +353,74 @@ def reset_password(employee_id):
             flash('Employee password reset! They can log in password-free to set a new password.', 'success')
     return redirect(url_for('employees'))
 
+# ================= MERCHANT MANAGEMENT =================
+
 @app.route('/merchants')
 def merchants():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     all_merchants = User.query.filter_by(role='merchant').all()
     
     MERCHANTS_HTML = """
-    <!DOCTYPE html><html><head><title>Merchants</title>
-    <style>body{font-family:sans-serif;padding:30px;background:#f1f5f9;}.card{background:#fff;padding:24px;border-radius:12px;}</style></head>
-    <body><div class="card"><h2>Merchant Management</h2><a href="{{ url_for('create_merchant') }}">+ Add Merchant</a> | <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
-    <hr><ul>{% for m in merchants %}<li>{{ m.username }}</li>{% else %}<li>No merchants found.</li>{% endfor %}</ul></div></body></html>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Merchant Management</title>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background: #f1f5f9; color: #334155; }
+            .card { background: #fff; padding: 24px; border-radius: 12px; max-width: 800px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; }
+            th { background: #f8fafc; padding: 12px; font-size: 13px; border-bottom: 2px solid #e2e8f0; }
+            td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
+            .btn { text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #fff; border: none; cursor: pointer; display: inline-block; }
+            .btn-blue { background: #2563eb; }
+            .btn-red { background: #dc2626; }
+            .btn-amber { background: #d97706; }
+            .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; background: #dcfce7; color: #15803d; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h2>🛒 Merchant Management</h2>
+            <div style="margin-top: 15px;">
+                <a href="{{ url_for('create_merchant') }}" class="btn btn-blue">+ Add New Merchant</a>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background:#475569;">← Back to Dashboard</a>
+            </div>
+            <hr style="margin: 20px 0; border:0; border-top:1px solid #e2e8f0;">
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <table>
+                <thead>
+                    <tr><th>Username</th><th>Actions</th></tr>
+                </thead>
+                <tbody>
+                    {% for m in merchants %}
+                    <tr>
+                        <td style="font-weight: 600;">{{ m.username }}</td>
+                        <td>
+                            <form action="{{ url_for('reset_merchant_password', merchant_id=m.id) }}" method="POST" style="display:inline; margin-right:5px;" onsubmit="return confirm('Reset password for {{ m.username }}?');">
+                                <button type="submit" class="btn btn-amber">Reset Password</button>
+                            </form>
+                            <form action="{{ url_for('delete_merchant', merchant_id=m.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete merchant {{ m.username }}?');">
+                                <button type="submit" class="btn btn-red">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="2" style="text-align:center; color:#94a3b8; padding:20px;">No merchants found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </body>
+    </html>
     """
     return render_template_string(MERCHANTS_HTML, merchants=all_merchants)
 
@@ -233,8 +428,11 @@ def merchants():
 def create_merchant():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     if request.method == 'POST':
-        username = request.form.get('username').strip()
+        username = request.form.get('username', '').strip()
         password = request.form.get('password')
+        if not username or not password:
+            flash('Username and password are required.', 'danger')
+            return redirect(url_for('create_merchant'))
         if User.query.filter_by(username=username).first():
             flash('Merchant username already exists.', 'danger')
             return redirect(url_for('create_merchant'))
@@ -252,6 +450,16 @@ def delete_merchant(merchant_id):
         db.session.delete(merchant)
         db.session.commit()
         flash('Merchant account removed successfully.', 'success')
+    return redirect(url_for('merchants'))
+
+@app.route('/merchant/reset_password/<int:merchant_id>', methods=['POST'])
+def reset_merchant_password(merchant_id):
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    merchant = User.query.get_or_404(merchant_id)
+    if merchant.role == 'merchant':
+        merchant.password = generate_password_hash('merchant123')
+        db.session.commit()
+        flash(f'Merchant password reset successfully! New temporary password is: merchant123', 'success')
     return redirect(url_for('merchants'))
 
 @app.route('/upload_employees', methods=['GET', 'POST'])
@@ -363,9 +571,7 @@ def reports_csv():
 
 @app.route('/employee/dashboard')
 def employee_dashboard():
-    if session.get('role') != 'employee': 
-        return redirect(url_for('login'))
-    
+    if session.get('role') != 'employee': return redirect(url_for('login'))
     user = User.query.get(session.get('user_id'))
     if user and user.is_first_login:
         flash('Please create a password for your account first.', 'warning')
@@ -383,37 +589,31 @@ def employee_dashboard():
     <html lang="en">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Employee Portal - Kolfe Coupon System</title>
+        <title>Employee Portal</title>
         <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
         <style>
             * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
             body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
-            .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-            .navbar-brand { color: #ffffff; font-size: 20px; font-weight: 700; }
-            .nav-btn { text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; color: #ffffff; background: #ef4444; border: none; }
+            .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; color: #fff; }
             .container { max-width: 900px; margin: 30px auto; padding: 0 20px; }
             .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px; }
             .card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-            .card h6 { font-size: 13px; text-transform: uppercase; color: #64748b; font-weight: 700; margin-bottom: 6px; }
-            .card h3 { font-size: 28px; font-weight: 800; }
             .qr-box { text-align: center; margin: 20px 0; }
             #qrcode { display: inline-block; padding: 15px; background: #fff; border: 2px dashed #cbd5e1; border-radius: 12px; }
             table { width: 100%; border-collapse: collapse; text-align: left; }
             th { background-color: #f8fafc; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
-            td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #334155; }
+            td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
             .alert { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 700; background-color: #dcfce7; color: #15803d; }
         </style>
     </head>
     <body>
         <nav class="navbar">
-            <div class="navbar-brand">👤 Employee Portal ({{ emp.full_name if emp else user.username }})</div>
+            <h2>👤 Employee Portal ({{ emp.full_name if emp else user.username }})</h2>
             <div>
                 <a href="{{ url_for('employee_change_password') }}" style="color:#38bdf8; text-decoration:none; margin-right:15px; font-weight:600;">🔐 Change Password</a>
-                <a href="{{ url_for('logout') }}" class="nav-btn">Logout</a>
+                <a href="{{ url_for('logout') }}" style="background:#ef4444; color:#fff; padding:6px 12px; border-radius:6px; text-decoration:none; font-weight:600;">Logout</a>
             </div>
         </nav>
-
         <div class="container">
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
@@ -422,37 +622,31 @@ def employee_dashboard():
                     {% endfor %}
                 {% endif %}
             {% endwith %}
-
             <div class="grid">
                 <div class="card" style="border-top: 4px solid #2563eb;">
-                    <h6>Monthly Allocation ({{ month }})</h6>
-                    <h3 style="color:#2563eb;">{{ "%.2f"|format(allocated) }} ETB</h3>
+                    <h6 style="color:#64748b; font-size:12px; text-transform:uppercase;">Monthly Allocation</h6>
+                    <h3 style="font-size:24px; font-weight:800; color:#2563eb; margin-top:5px;">{{ "%.2f"|format(allocated) }} ETB</h3>
                 </div>
                 <div class="card" style="border-top: 4px solid #ef4444;">
-                    <h6>Total Spent</h6>
-                    <h3 style="color:#ef4444;">{{ "%.2f"|format(spent) }} ETB</h3>
+                    <h6 style="color:#64748b; font-size:12px; text-transform:uppercase;">Total Spent</h6>
+                    <h3 style="font-size:24px; font-weight:800; color:#ef4444; margin-top:5px;">{{ "%.2f"|format(spent) }} ETB</h3>
                 </div>
                 <div class="card" style="border-top: 4px solid #16a34a;">
-                    <h6>Remaining Balance</h6>
-                    <h3 style="color:#16a34a;">{{ "%.2f"|format(balance) }} ETB</h3>
+                    <h6 style="color:#64748b; font-size:12px; text-transform:uppercase;">Remaining Balance</h6>
+                    <h3 style="font-size:24px; font-weight:800; color:#16a34a; margin-top:5px;">{{ "%.2f"|format(balance) }} ETB</h3>
                 </div>
             </div>
-
             <div class="card" style="margin-bottom: 25px;">
-                <h4 style="font-size: 18px; font-weight:700; margin-bottom:10px;">Your Digital Coupon QR Card</h4>
-                <p style="font-size: 14px; color:#64748b;">Show this QR code to cafeteria merchants to redeem your coupon.</p>
+                <h4 style="margin-bottom:10px;">Your Digital Coupon QR Card</h4>
                 <div class="qr-box">
                     <div id="qrcode"></div>
                     <p style="margin-top:10px; font-family:monospace; font-weight:700; color:#475569;">Token: {{ emp.qr_token if emp else 'N/A' }}</p>
                 </div>
             </div>
-
             <div class="card">
-                <h4 style="font-size: 18px; font-weight:700; margin-bottom:15px;">Your Redemption History</h4>
+                <h4 style="margin-bottom:15px;">Your Redemption History</h4>
                 <table>
-                    <thead>
-                        <tr><th>Date & Time</th><th>Reference</th><th>Amount Redeemed</th></tr>
-                    </thead>
+                    <thead><tr><th>Date & Time</th><th>Reference</th><th>Amount Redeemed</th></tr></thead>
                     <tbody>
                         {% for t in transactions %}
                         <tr>
@@ -461,20 +655,15 @@ def employee_dashboard():
                             <td style="font-weight:700; color:#ef4444;">-{{ "%.2f"|format(t.amount) }} ETB</td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No coupon redemptions recorded yet.</td></tr>
+                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No redemptions yet.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
-
         <script>
             {% if emp and emp.qr_token %}
-            new QRCode(document.getElementById("qrcode"), {
-                text: "{{ emp.qr_token }}",
-                width: 180,
-                height: 180
-            });
+            new QRCode(document.getElementById("qrcode"), { text: "{{ emp.qr_token }}", width: 160, height: 160 });
             {% endif %}
         </script>
     </body>
@@ -492,17 +681,17 @@ def employee_change_password():
             user.password = generate_password_hash(new_password)
             user.is_first_login = False
             db.session.commit()
-            flash('Password set successfully! Welcome to your dashboard.', 'success')
+            flash('Password set successfully!', 'success')
             return redirect(url_for('employee_dashboard'))
             
     PWD_HTML = """
-    <!DOCTYPE html><html><head><title>Create Password</title>
+    <!DOCTYPE html><html><head><title>Set Password</title>
     <style>body{font-family:sans-serif;background:#f1f5f9;display:flex;justify-content:center;align-items:center;height:100vh;}
     .card{background:#fff;padding:30px;border-radius:12px;width:350px;box-shadow:0 4px 6px rgba(0,0,0,0.1);}
     input{width:100%;padding:10px;margin:10px 0 20px 0;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;}
     button{width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;}</style></head>
-    <body><div class="card"><h3>🔐 Set New Password</h3><p style="font-size:13px;color:#64748b;">Please create a new password for your employee account.</p>
-    <form method="POST"><label>New Password:</label><input type="password" name="new_password" required placeholder="Enter new password"><button type="submit">Save Password</button></form></div></body></html>
+    <body><div class="card"><h3>🔐 Set New Password</h3>
+    <form method="POST"><label>New Password:</label><input type="password" name="new_password" required><button type="submit">Save Password</button></form></div></body></html>
     """
     return render_template_string(PWD_HTML)
 
