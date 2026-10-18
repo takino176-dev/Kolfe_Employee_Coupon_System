@@ -132,7 +132,7 @@ def admin_dashboard():
     recent_transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
     
     return render_template('admin.html', month=month, employees=employees_count, 
-                           allocated=total_allocated, spent=total_spent, 
+                           allocated=total_allocated, spent=total_spent, collected=total_spent, 
                            transactions=recent_transactions)
 
 @app.route('/employees')
