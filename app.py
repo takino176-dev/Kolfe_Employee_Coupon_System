@@ -11,17 +11,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe-secret-key-2026')
 
-db_path = os.path.join('/tmp', 'coupon_system_v6.db')
+# Persistent DB path on Render
+db_path = os.path.join('/tmp', 'coupon_system_v7.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+# ================= DATABASE MODELS =================
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
-    role = db.Column(db.String(20), nullable=False)
+    role = db.Column(db.String(20), nullable=False)  # 'admin', 'merchant', 'employee'
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -52,13 +55,23 @@ class Transaction(db.Model):
 with app.app_context():
     db.create_all()
 
+# Global Error Handler so 500 Internal Server Errors show exact details instead of a blank screen
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return f"<h2 style='color:red; font-family:Arial;'>Application Error:</h2><pre>{str(e)}</pre>", 500
+
+# ================= AUTH & GENERAL ROUTES =================
+
 @app.route('/')
 def index():
     if 'user_id' in session:
         role = session.get('role')
-        if role == 'admin': return redirect(url_for('admin_dashboard'))
-        elif role == 'merchant': return redirect(url_for('merchant_dashboard'))
-        elif role == 'employee': return redirect(url_for('employee_dashboard'))
+        if role in ['admin', 'superadmin']: 
+            return redirect(url_for('admin_dashboard'))
+        elif role == 'merchant': 
+            return redirect(url_for('merchant_dashboard'))
+        elif role == 'employee': 
+            return redirect(url_for('employee_dashboard'))
     return redirect(url_for('login'))
 
 @app.route('/setup', methods=['GET', 'POST'])
@@ -88,21 +101,27 @@ def login():
             session['username'] = user.username
             session['role'] = user.role
             flash('Logged in successfully.', 'success')
-            if user.role == 'admin': return redirect(url_for('admin_dashboard'))
-            elif user.role == 'merchant': return redirect(url_for('merchant_dashboard'))
-            elif user.role == 'employee': return redirect(url_for('employee_dashboard'))
+            if user.role in ['admin', 'superadmin']: 
+                return redirect(url_for('admin_dashboard'))
+            elif user.role == 'merchant': 
+                return redirect(url_for('merchant_dashboard'))
+            elif user.role == 'employee': 
+                return redirect(url_for('employee_dashboard'))
         flash('Invalid username or password.', 'danger')
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
     session.clear()
-    flash('Logged out.', 'info')
+    flash('Logged out successfully.', 'info')
     return redirect(url_for('login'))
 
+# ================= ADMIN ROUTES =================
+
 @app.route('/dashboard')
+@app.route('/admin')
 def admin_dashboard():
-    if session.get('role') != 'admin':
+    if session.get('role') not in ['admin', 'superadmin']:
         flash('Unauthorized.', 'danger')
         return redirect(url_for('login'))
     
@@ -120,12 +139,14 @@ def admin_dashboard():
 
 @app.route('/employees')
 def employees():
-    if session.get('role') != 'admin': return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
     return render_template('employees.html', employees=Employee.query.all())
 
 @app.route('/add_employee', methods=['GET', 'POST'])
 def add_employee():
-    if session.get('role') != 'admin': return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
     if request.method == 'POST':
         emp_id = request.form.get('employee_id')
         full_name = request.form.get('full_name')
@@ -145,7 +166,8 @@ def add_employee():
 
 @app.route('/upload_employees', methods=['GET', 'POST'])
 def upload_employees():
-    if session.get('role') != 'admin': return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
     if request.method == 'POST':
         file = request.files.get('file')
         if file:
@@ -170,12 +192,27 @@ def upload_employees():
 
 @app.route('/print_cards')
 def print_cards():
-    if session.get('role') != 'admin': return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
     return render_template('print_cards.html', employees=Employee.query.all())
 
+@app.route('/qrlist')
+def qrlist():
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['employee_id', 'full_name', 'sector', 'qr_token'])
+    for emp in Employee.query.all():
+        writer.writerow([emp.employee_id, emp.full_name, emp.sector, emp.qr_token])
+    byte_output = io.BytesIO(output.getvalue().encode('utf-8'))
+    output.close()
+    return send_file(byte_output, mimetype='text/csv', download_name='employee_qr_list.csv', as_attachment=True)
+
+@app.route('/reports')
 @app.route('/reports_csv')
 def reports_csv():
-    if session.get('role') != 'admin':
+    if session.get('role') not in ['admin', 'superadmin']:
         return redirect(url_for('login'))
     output = io.StringIO()
     writer = csv.writer(output)
@@ -188,21 +225,32 @@ def reports_csv():
 
 @app.route('/allocations', methods=['GET', 'POST'])
 def allocations():
-    if session.get('role') != 'admin': return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
     month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
     if request.method == 'POST':
         amount = float(request.form.get('amount', 0))
         for emp in Employee.query.all():
             alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
-            if alloc: alloc.amount = amount
-            else: db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
+            if alloc: 
+                alloc.amount = amount
+            else: 
+                db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
         db.session.commit()
         flash('Allocated!', 'success')
     return render_template('allocations.html', employees=Employee.query.all(), month=month)
 
+@app.route('/close_month')
+def close_month():
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
+    flash('Month closed successfully.', 'info')
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/create_merchant', methods=['GET', 'POST'])
 def create_merchant():
-    if session.get('role') != 'admin': return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
     if request.method == 'POST':
         db.session.add(User(username=request.form.get('username'), password=generate_password_hash(request.form.get('password')), role='merchant'))
         db.session.commit()
@@ -212,7 +260,8 @@ def create_merchant():
 
 @app.route('/reset_password/<int:employee_id>', methods=['POST'])
 def reset_password(employee_id):
-    if session.get('role') != 'admin': return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
     emp = Employee.query.get_or_404(employee_id)
     if emp.user:
         emp.user.password = generate_password_hash(request.form.get('new_password'))
@@ -220,9 +269,12 @@ def reset_password(employee_id):
         flash('Password reset!', 'success')
     return redirect(url_for('employees'))
 
+# ================= EMPLOYEE PORTAL =================
+
 @app.route('/employee/dashboard')
 def employee_dashboard():
-    if session.get('role') != 'employee': return redirect(url_for('login'))
+    if session.get('role') != 'employee': 
+        return redirect(url_for('login'))
     user = User.query.get(session.get('user_id'))
     emp = user.employee_profile
     month = datetime.utcnow().strftime('%Y-%m')
@@ -233,22 +285,27 @@ def employee_dashboard():
 
 @app.route('/employee/change_password', methods=['POST'])
 def employee_change_password():
-    if session.get('role') != 'employee': return redirect(url_for('login'))
+    if session.get('role') != 'employee': 
+        return redirect(url_for('login'))
     User.query.get(session.get('user_id')).password = generate_password_hash(request.form.get('new_password'))
     db.session.commit()
     flash('Password updated.', 'success')
     return redirect(url_for('employee_dashboard'))
 
+# ================= MERCHANT PORTAL =================
+
 @app.route('/merchant/dashboard')
 def merchant_dashboard():
-    if session.get('role') != 'merchant': return redirect(url_for('login'))
+    if session.get('role') != 'merchant': 
+        return redirect(url_for('login'))
     month = datetime.utcnow().strftime('%Y-%m')
     txs = Transaction.query.filter_by(merchant_id=session.get('user_id'), month=month).all()
     return render_template('merchant.html', transactions=txs, total_collected=sum(t.amount for t in txs), month=month)
 
 @app.route('/merchant/scan', methods=['POST'])
 def merchant_scan():
-    if session.get('role') != 'merchant': return redirect(url_for('login'))
+    if session.get('role') != 'merchant': 
+        return redirect(url_for('login'))
     token = request.form.get('qr_token')
     amount = float(request.form.get('amount', 0))
     month = datetime.utcnow().strftime('%Y-%m')
