@@ -1,1 +1,27 @@
-{% extends "base.html" %}{% block content %}<h1>Monthly coupon allocation</h1><div class="panel"><form method="get"><label>Month</label><input type="month" name="month" value="{{ month }}"><button>Load month</button></form><p>Allocation = working days × daily rate. Released allocations cannot be changed by prepare.</p><form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="month" value="{{ month }}"><div class="row"><div><label>Working days</label><input type="number" name="working_days" min="0" max="31" required></div><div><label>Daily coupon rate</label><input type="number" name="daily_rate" min="0" step=".01" required></div></div><button name="action" value="prepare">Prepare allocations</button></form><p>Visible prepared total (up to 1,000 rows): {{ "%.2f"|format(total) }} | Released {{ released }} | Pending {{ pending }}</p><form method="post" onsubmit="return confirm('Release all pending allocations for this month?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="month" value="{{ month }}"><button name="action" value="release">Release all pending</button></form></div><div class="panel table-wrap"><table><tr><th>ID</th><th>Name</th><th>Sector</th><th>Amount</th><th>Status</th></tr>{% for a in rows %}<tr><td>{{ a.employee.employee_id }}</td><td>{{ a.employee.full_name }}</td><td>{{ a.employee.sector }}</td><td>{{ "%.2f"|format(a.amount) }}</td><td>{{ 'Released' if a.released else 'Pending' }}</td></tr>{% endfor %}</table></div>{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Release Coupon Allocations</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css">
+</head>
+<body class="bg-light p-5">
+    <div class="container bg-white p-4 rounded shadow-sm" style="max-width: 600px;">
+        <h2 class="mb-4">Release Monthly Coupon Allocation</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <label class="form-label">Month (YYYY-MM)</label>
+                <input type="text" name="month" class="form-control" value="{{ month }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Allocation Amount per Employee (ETB)</label>
+                <input type="number" step="0.01" name="amount" class="form-control" placeholder="e.g. 1000" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Release Allocation to All Employees</button>
+        </form>
+        <div class="mt-3 text-center">
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary btn-sm">Back to Dashboard</a>
+        </div>
+    </div>
+</body>
+</html>
