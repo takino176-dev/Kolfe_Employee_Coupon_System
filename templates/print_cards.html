@@ -21,8 +21,9 @@
 </head>
 <body>
     <div class="no-print">
-        <button class="btn" onclick="window.print()">🖨️ Print All Cards</button>
+        <button class="btn" onclick="window.print()">🖨️ Print {% if single %}Single Card{% else %}All Cards (Bulk){% endif %}</button>
         <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background: #64748b; margin-left: 10px;">Back to Dashboard</a>
+        <a href="{{ url_for('employees') }}" class="btn" style="background: #0d9488; margin-left: 10px;">View Employees List</a>
     </div>
 
     <div class="card-container">
@@ -31,7 +32,7 @@
             <h3>{{ emp.full_name }}</h3>
             <p><strong>ID:</strong> {{ emp.employee_id }}</p>
             <p><strong>Sector:</strong> {{ emp.sector }}</p>
-            <!-- Visual QR Code Generator -->
+            <!-- Visual QR Code Generator API -->
             <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ emp.qr_token }}" alt="QR Code">
             <p style="font-size: 11px; word-break: break-all; color: #94a3b8;">Token: {{ emp.qr_token }}</p>
         </div>

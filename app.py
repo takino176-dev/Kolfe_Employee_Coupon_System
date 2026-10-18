@@ -11,7 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe-secret-key-2026')
 
-db_path = os.path.join('/tmp', 'coupon_system_v9.db')
+db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'coupon_system.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -125,15 +125,13 @@ def admin_dashboard():
 
 @app.route('/employees')
 def employees():
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     all_emps = Employee.query.all()
     return render_template('employees.html', employees=all_emps, rows=all_emps)
 
 @app.route('/add_employee', methods=['GET', 'POST'])
 def add_employee():
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     if request.method == 'POST':
         emp_id = request.form.get('employee_id')
         full_name = request.form.get('full_name')
@@ -153,8 +151,7 @@ def add_employee():
 
 @app.route('/upload_employees', methods=['GET', 'POST'])
 def upload_employees():
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     if request.method == 'POST':
         file = request.files.get('file')
         if file:
@@ -194,15 +191,19 @@ def upload_employees():
 
 @app.route('/print_cards')
 def print_cards():
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     all_emps = Employee.query.all()
-    return render_template('print_cards.html', employees=all_emps, rows=all_emps)
+    return render_template('print_cards.html', employees=all_emps, single=False)
+
+@app.route('/print_card/<int:emp_id>')
+def print_single_card(emp_id):
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    emp = Employee.query.get_or_404(emp_id)
+    return render_template('print_cards.html', employees=[emp], single=True)
 
 @app.route('/qrlist')
 def qrlist():
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['employee_id', 'full_name', 'sector', 'qr_token'])
@@ -215,8 +216,7 @@ def qrlist():
 @app.route('/reports')
 @app.route('/reports_csv')
 def reports_csv():
-    if session.get('role') not in ['admin', 'superadmin']:
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['ID', 'Reference', 'Amount', 'Date'])
@@ -228,31 +228,36 @@ def reports_csv():
 
 @app.route('/allocations', methods=['GET', 'POST'])
 def allocations():
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
     all_emps = Employee.query.all()
     if request.method == 'POST':
+        target = request.form.get('target', 'all')
         amount = float(request.form.get('amount', 0))
-        for emp in all_emps:
-            alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
+        if target == 'all':
+            for emp in all_emps:
+                alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
+                if alloc: alloc.amount = amount
+                else: db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
+            flash('Allocation released successfully to all employees!', 'success')
+        else:
+            emp_id = request.form.get('employee_id')
+            alloc = CouponAllocation.query.filter_by(employee_id=emp_id, month=month).first()
             if alloc: alloc.amount = amount
-            else: db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
+            else: db.session.add(CouponAllocation(employee_id=emp_id, month=month, amount=amount))
+            flash('Allocation released successfully for single employee!', 'success')
         db.session.commit()
-        flash('Allocated successfully!', 'success')
-    return render_template('allocations.html', employees=all_emps, rows=all_emps, month=month)
+    return render_template('allocations.html', employees=all_emps, month=month)
 
 @app.route('/close_month')
 def close_month():
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     flash('Month closed successfully.', 'info')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/create_merchant', methods=['GET', 'POST'])
 def create_merchant():
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     if request.method == 'POST':
         db.session.add(User(username=request.form.get('username'), password=generate_password_hash(request.form.get('password')), role='merchant'))
         db.session.commit()
@@ -262,8 +267,7 @@ def create_merchant():
 
 @app.route('/reset_password/<int:employee_id>', methods=['POST'])
 def reset_password(employee_id):
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     emp = Employee.query.get_or_404(employee_id)
     if emp.user:
         emp.user.password = generate_password_hash(request.form.get('new_password'))
@@ -273,8 +277,7 @@ def reset_password(employee_id):
 
 @app.route('/employee/dashboard')
 def employee_dashboard():
-    if session.get('role') != 'employee': 
-        return redirect(url_for('login'))
+    if session.get('role') != 'employee': return redirect(url_for('login'))
     user = User.query.get(session.get('user_id'))
     emp = user.employee_profile
     month = datetime.utcnow().strftime('%Y-%m')
@@ -285,8 +288,7 @@ def employee_dashboard():
 
 @app.route('/employee/change_password', methods=['POST'])
 def employee_change_password():
-    if session.get('role') != 'employee': 
-        return redirect(url_for('login'))
+    if session.get('role') != 'employee': return redirect(url_for('login'))
     User.query.get(session.get('user_id')).password = generate_password_hash(request.form.get('new_password'))
     db.session.commit()
     flash('Password updated.', 'success')
@@ -294,16 +296,14 @@ def employee_change_password():
 
 @app.route('/merchant/dashboard')
 def merchant_dashboard():
-    if session.get('role') != 'merchant': 
-        return redirect(url_for('login'))
+    if session.get('role') != 'merchant': return redirect(url_for('login'))
     month = datetime.utcnow().strftime('%Y-%m')
     txs = Transaction.query.filter_by(merchant_id=session.get('user_id'), month=month).all()
     return render_template('merchant.html', transactions=txs, total_collected=sum(t.amount for t in txs), month=month)
 
 @app.route('/merchant/scan', methods=['POST'])
 def merchant_scan():
-    if session.get('role') != 'merchant': 
-        return redirect(url_for('login'))
+    if session.get('role') != 'merchant': return redirect(url_for('login'))
     token = request.form.get('qr_token')
     amount = float(request.form.get('amount', 0))
     month = datetime.utcnow().strftime('%Y-%m')

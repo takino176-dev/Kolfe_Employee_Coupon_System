@@ -1,1 +1,60 @@
-{% extends "base.html" %}{% block content %}<div class="row"><div><h1>Employees</h1><p class="muted">100 records per page</p></div><a class="btn" href="{{ url_for('add_employee') }}">+ Add employee</a></div><div class="panel"><form method="get"><label>Search employee ID, name or sector</label><input name="q" value="{{ q }}"><button>Search</button></form></div><div class="panel table-wrap"><table><tr><th>ID</th><th>Name</th><th>Sector</th><th>Username</th><th>QR</th><th>Password</th></tr>{% for e in rows.items %}<tr><td>{{ e.employee_id }}</td><td>{{ e.full_name }}</td><td>{{ e.sector }}</td><td>{{ e.user.username }}</td><td><a target="_blank" href="{{ url_for('qr_image',token=e.qr_token) }}">View QR</a></td><td><form method="post" action="{{ url_for('reset_password',uid=e.user.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary">Reset</button></form></td></tr>{% endfor %}</table><p>Page {{ rows.page }} / {{ rows.pages }}</p><div class="actions">{% if rows.has_prev %}<a class="btn secondary" href="{{ url_for('employees',page=rows.prev_num,q=q) }}">Previous</a>{% endif %}{% if rows.has_next %}<a class="btn secondary" href="{{ url_for('employees',page=rows.next_num,q=q) }}">Next</a>{% endif %}</div></div>{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Employees</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css">
+</head>
+<body class="bg-light p-5">
+    <div class="container bg-white p-4 rounded shadow-sm">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Employee Management</h2>
+            <div>
+                <a href="{{ url_for('add_employee') }}" class="btn btn-primary">+ Add Employee</a>
+                <a href="{{ url_for('upload_employees') }}" class="btn btn-info text-white">Bulk Upload</a>
+                <a href="{{ url_for('print_cards') }}" class="btn btn-secondary">Print All QR Cards</a>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-dark">Dashboard</a>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Employee ID</th>
+                    <th>Full Name</th>
+                    <th>Sector</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                <tr>
+                    <td>{{ emp.employee_id }}</td>
+                    <td>{{ emp.full_name }}</td>
+                    <td>{{ emp.sector }}</td>
+                    <td>
+                        <a href="{{ url_for('print_single_card', emp_id=emp.id) }}" class="btn btn-sm btn-outline-primary" target="_blank">🖨️ Print QR Card</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted">No employees registered yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
