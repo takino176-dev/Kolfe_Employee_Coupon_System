@@ -8,7 +8,6 @@ from flask import Flask, render_template, render_template_string, request, redir
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# Explicitly define template folder relative to app directory
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 
@@ -20,8 +19,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-
-# ================= DATABASE MODELS =================
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -62,8 +59,6 @@ with app.app_context():
 def handle_exception(e):
     return f"<h2 style='color:red; font-family:Arial;'>Application Error:</h2><pre>{str(e)}</pre>", 500
 
-# ================= AUTH & GENERAL ROUTES =================
-
 @app.route('/')
 def index():
     if 'user_id' in session:
@@ -71,12 +66,15 @@ def index():
         if role in ['admin', 'superadmin']: return redirect(url_for('admin_dashboard'))
         elif role == 'merchant': return redirect(url_for('merchant_dashboard'))
         elif role == 'employee': return redirect(url_for('employee_dashboard'))
-    return redirect(url_for('login'))
+    
+    # If admin already exists, go straight to login page!
+    if User.query.filter_by(role='admin').first():
+        return redirect(url_for('login'))
+    return redirect(url_for('setup'))
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup():
     if User.query.filter_by(role='admin').first():
-        flash('Admin already exists. Please log in.', 'info')
         return redirect(url_for('login'))
     if request.method == 'POST':
         username = request.form.get('username')
@@ -111,8 +109,6 @@ def logout():
     session.clear()
     flash('Logged out successfully.', 'info')
     return redirect(url_for('login'))
-
-# ================= ADMIN ROUTES =================
 
 @app.route('/dashboard')
 @app.route('/admin')
@@ -184,30 +180,11 @@ def delete_employee(emp_id):
     flash('Employee removed successfully.', 'success')
     return redirect(url_for('employees'))
 
-# MERCHANTS PAGE WITH INLINE BACKUP TEMPLATE TO PREVENT MISSING FILE ERRORS
 @app.route('/merchants')
 def merchants():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     all_merchants = User.query.filter_by(role='merchant').all()
-    
-    # Try loading file, fall back to embedded string template if missing
-    try:
-        return render_template('merchants.html', merchants=all_merchants)
-    except Exception:
-        HTML = """
-        <!DOCTYPE html><html><head><title>Merchant Management</title>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css"></head>
-        <body class="bg-light p-4"><div class="container bg-white p-4 rounded shadow-sm">
-        <div class="d-flex justify-content-between mb-4"><h2 class="fw-bold">Merchant Management</h2>
-        <div><a href="{{ url_for('create_merchant') }}" class="btn btn-success">+ Add Merchant</a>
-        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-dark">Dashboard</a></div></div>
-        <table class="table table-striped align-middle"><thead><tr><th>Username</th><th>Role</th><th class="text-end">Actions</th></tr></thead>
-        <tbody>{% for m in merchants %}<tr><td class="fw-bold">{{ m.username }}</td><td><span class="badge bg-success">Merchant</span></td>
-        <td class="text-end"><form action="{{ url_for('delete_merchant', merchant_id=m.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Delete merchant?');">
-        <button type="submit" class="btn btn-sm btn-danger">🗑️ Delete</button></form></td></tr>{% else %}
-        <tr><td colspan="3" class="text-center py-3">No merchants created yet.</td></tr>{% endfor %}</tbody></table></div></body></html>
-        """
-        return render_template_string(HTML, merchants=all_merchants)
+    return render_template('merchants.html', merchants=all_merchants)
 
 @app.route('/create_merchant', methods=['GET', 'POST'])
 def create_merchant():
@@ -344,8 +321,6 @@ def reset_password(employee_id):
         flash('Employee password reset successfully!', 'success')
     return redirect(url_for('employees'))
 
-# ================= EMPLOYEE & MERCHANT PORTALS =================
-
 @app.route('/employee/dashboard')
 def employee_dashboard():
     if session.get('role') != 'employee': return redirect(url_for('login'))
@@ -362,36 +337,3 @@ def employee_change_password():
     if session.get('role') != 'employee': return redirect(url_for('login'))
     User.query.get(session.get('user_id')).password = generate_password_hash(request.form.get('new_password'))
     db.session.commit()
-    flash('Password updated.', 'success')
-    return redirect(url_for('employee_dashboard'))
-
-@app.route('/merchant/dashboard')
-def merchant_dashboard():
-    if session.get('role') != 'merchant': return redirect(url_for('login'))
-    month = datetime.utcnow().strftime('%Y-%m')
-    txs = Transaction.query.filter_by(merchant_id=session.get('user_id'), month=month).all()
-    return render_template('merchant.html', transactions=txs, total_collected=sum(t.amount for t in txs), month=month)
-
-@app.route('/merchant/scan', methods=['POST'])
-def merchant_scan():
-    if session.get('role') != 'merchant': return redirect(url_for('login'))
-    token = request.form.get('qr_token')
-    amount = float(request.form.get('amount', 0))
-    month = datetime.utcnow().strftime('%Y-%m')
-    emp = Employee.query.filter_by(qr_token=token).first()
-    if not emp:
-        flash('Invalid QR.', 'danger')
-        return redirect(url_for('merchant_dashboard'))
-    alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
-    allocated = alloc.amount if alloc else 0.0
-    spent = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all())
-    if amount > (allocated - spent):
-        flash('Insufficient balance!', 'danger')
-        return redirect(url_for('merchant_dashboard'))
-    db.session.add(Transaction(reference=secrets.token_hex(6).upper(), employee_id=emp.id, merchant_id=session.get('user_id'), amount=amount, month=month))
-    db.session.commit()
-    flash('Redeemed successfully!', 'success')
-    return redirect(url_for('merchant_dashboard'))
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
