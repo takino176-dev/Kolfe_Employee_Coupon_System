@@ -2,86 +2,36 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kolfe Employee Coupon System - Admin Dashboard</title>
+    <title>Admin Dashboard - Kolfe Coupon System</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
-        
-        /* Navigation Bar */
-        .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .navbar-brand { color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
-        .nav-links { display: flex; gap: 12px; }
-        .nav-btn { text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; transition: all 0.2s ease; color: #f8fafc; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); }
-        .nav-btn:hover { background: rgba(255,255,255,0.25); color: #ffffff; }
-        .nav-btn.logout { background: #ef4444; border: none; }
-        .nav-btn.logout:hover { background: #dc2626; }
-
-        .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
-        .header-title { font-size: 28px; font-weight: 800; color: #0f172a; margin-bottom: 24px; }
-
-        /* Month Filter Card */
-        .filter-card { background: #ffffff; padding: 18px 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 24px; display: flex; align-items: center; gap: 16px; border-left: 5px solid #2563eb; }
-        .filter-card label { font-weight: 700; color: #475569; }
-        .filter-card input[type="text"] { padding: 8px 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 15px; outline: none; }
-        .filter-card button { padding: 8px 20px; background: #2563eb; color: #ffffff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
-        .filter-card button:hover { background: #1d4ed8; }
-
-        /* Metric Grid Cards */
-        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 28px; }
-        .metric-card { background: #ffffff; padding: 22px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-top: 4px solid #94a3b8; transition: transform 0.2s ease; }
-        .metric-card:hover { transform: translateY(-3px); }
-        .metric-card.employees { border-color: #3b82f6; }
-        .metric-card.allocated { border-color: #eab308; }
-        .metric-card.spent { border-color: #ef4444; }
-        .metric-card.collected { border-color: #22c55e; }
-        .metric-card h6 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 700; margin-bottom: 8px; }
-        .metric-card h3 { font-size: 28px; font-weight: 800; color: #0f172a; }
-
-        /* Quick Actions Section */
-        .actions-card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 28px; }
-        .actions-card h4 { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 16px; }
-        .action-buttons { display: flex; flex-wrap: wrap; gap: 12px; }
-        .action-btn { text-decoration: none; padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 700; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s ease; }
-        .action-btn:hover { opacity: 0.9; transform: translateY(-2px); }
-        
-        .btn-add-emp { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
-        .btn-add-merch { background: linear-gradient(135deg, #16a34a, #15803d); }
-        .btn-excel { background: linear-gradient(135deg, #0891b2, #0e7490); }
-        .btn-alloc { background: linear-gradient(135deg, #ca8a04, #a16207); }
-        .btn-qr { background: linear-gradient(135deg, #475569, #334155); }
-        .btn-qrlist { background: linear-gradient(135deg, #0f172a, #1e293b); }
-        .btn-report { background: linear-gradient(135deg, #dc2626, #b91c1c); }
-
-        /* Recent Transactions Table */
-        .table-card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-        .table-card h4 { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 16px; }
-        table { width: 100%; border-collapse: collapse; text-align: left; }
+        .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; color: #fff; }
+        .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 25px; }
+        .card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .actions-bar { background: #ffffff; padding: 20px; border-radius: 12px; margin-bottom: 25px; display: flex; flex-wrap: wrap; gap: 10px; }
+        .btn { text-decoration: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; font-size: 14px; color: #fff; border: none; cursor: pointer; display: inline-block; }
+        .btn-blue { background: #2563eb; }
+        .btn-green { background: #16a34a; }
+        .btn-dark { background: #475569; }
+        .btn-red { background: #dc2626; }
+        table { width: 100%; border-collapse: collapse; text-align: left; background: #fff; border-radius: 12px; overflow: hidden; margin-bottom: 25px; }
         th { background-color: #f8fafc; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #334155; }
-        tr:hover { background-color: #f8fafc; }
-        
-        .alert { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 600; background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .alert { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 700; background-color: #dcfce7; color: #15803d; }
     </style>
 </head>
 <body>
-
-    <!-- Navigation Header -->
     <nav class="navbar">
-        <div class="navbar-brand">🏢 Kolfe Employee Coupon System</div>
-        <div class="nav-links">
-            <a href="{{ url_for('admin_dashboard') }}" class="nav-btn">Dashboard</a>
-            <a href="{{ url_for('employees') }}" class="nav-btn">Employees</a>
-            <a href="{{ url_for('merchants') }}" class="nav-btn">Merchants</a>
-            <a href="{{ url_for('admin_change_password') }}" class="nav-btn">Password</a>
-            <a href="{{ url_for('logout') }}" class="nav-btn logout">Logout</a>
+        <h2>👑 Admin Control Dashboard</h2>
+        <div>
+            <a href="{{ url_for('admin_change_password') }}" style="color:#38bdf8; text-decoration:none; margin-right:15px; font-weight:600;">🔐 Change Password</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-red" style="padding:6px 12px;">Logout</a>
         </div>
     </nav>
 
     <div class="container">
-        <h2 class="header-title">Admin Control Dashboard</h2>
-
-        <!-- Flash Messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -90,81 +40,87 @@
             {% endif %}
         {% endwith %}
 
-        <!-- Month Filter Card -->
-        <div class="filter-card">
-            <form method="GET" style="display: flex; align-items: center; gap: 12px;">
-                <label>Select Allocation Month:</label>
-                <input type="text" name="month" value="{{ month }}" placeholder="YYYY-MM">
-                <button type="submit">Filter Data</button>
-            </form>
-        </div>
+        <form method="GET" class="card" style="margin-bottom: 25px; display:flex; gap:15px; align-items:center;">
+            <label style="font-weight:700;">Select Month:</label>
+            <input type="text" name="month" value="{{ month }}" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+            <button type="submit" class="btn btn-blue" style="padding:8px 16px;">Filter Month Data</button>
+        </form>
 
-        <!-- Metric Cards -->
-        <div class="metrics-grid">
-            <div class="metric-card employees">
-                <h6>Total Employees</h6>
-                <h3>{{ employees }}</h3>
+        <div class="grid">
+            <div class="card" style="border-top: 4px solid #2563eb;">
+                <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Total Employees</h6>
+                <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ employees }}</h3>
             </div>
-            <div class="metric-card allocated">
-                <h6>Released Allocation</h6>
-                <h3>{{ "%.2f"|format(allocated) }} ETB</h3>
+            <div class="card" style="border-top: 4px solid #d97706;">
+                <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Released Allocation ({{ month }})</h6>
+                <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(allocated) }} ETB</h3>
             </div>
-            <div class="metric-card spent">
-                <h6>Total Spent</h6>
-                <h3>{{ "%.2f"|format(spent) }} ETB</h3>
+            <div class="card" style="border-top: 4px solid #ef4444;">
+                <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Total Spent ({{ month }})</h6>
+                <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(spent) }} ETB</h3>
             </div>
-            <div class="metric-card collected">
-                <h6>Merchant Collected</h6>
-                <h3>{{ "%.2f"|format(collected) }} ETB</h3>
+            <div class="card" style="border-top: 4px solid #16a34a;">
+                <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Merchant Collected</h6>
+                <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(collected) }} ETB</h3>
             </div>
         </div>
 
-        <!-- Quick Actions -->
-        <div class="actions-card">
-            <h4>Management Actions</h4>
-            <div class="action-buttons">
-                <a href="{{ url_for('add_employee') }}" class="action-btn btn-add-emp">➕ Add Employee</a>
-                <a href="{{ url_for('create_merchant') }}" class="action-btn btn-add-merch">🏪 Add Merchant</a>
-                <a href="{{ url_for('upload_employees') }}" class="action-btn btn-excel">📊 Bulk Excel Upload</a>
-                <a href="{{ url_for('allocations') }}" class="action-btn btn-alloc">💰 Release Allocations</a>
-                <a href="{{ url_for('print_cards') }}" class="action-btn btn-qr">🖨️ Print QR Cards</a>
-                <a href="{{ url_for('qrlist') }}" class="action-btn btn-qrlist">📋 Export QR List</a>
-                <a href="{{ url_for('reports_csv') }}" class="action-btn btn-report">📈 Export Transactions</a>
-            </div>
+        <div class="actions-bar">
+            <a href="{{ url_for('add_employee') }}" class="btn btn-blue">+ Add Employee</a>
+            <a href="{{ url_for('employees') }}" class="btn btn-dark">Manage & Bulk Delete Employees</a>
+            <a href="{{ url_for('merchants') }}" class="btn btn-green">Manage Merchants</a>
+            <a href="{{ url_for('upload_employees') }}" class="btn btn-dark">Bulk Excel Upload</a>
+            <a href="{{ url_for('allocations') }}" class="btn" style="background:#b45309;">Release Allocations</a>
+            <a href="{{ url_for('print_cards') }}" class="btn btn-dark">Print QR Cards</a>
+            <a href="{{ url_for('standalone_qr_print') }}" class="btn" style="background:#0284c7;">Print Standalone QR</a>
+            <a href="{{ url_for('qrlist') }}" class="btn btn-dark">Export QR List</a>
+            <a href="{{ url_for('reports_csv') }}?month={{ month }}" class="btn btn-red">Export Monthly Sector Report (CSV)</a>
         </div>
 
-        <!-- Payments Table -->
-        <div class="table-card">
-            <h4>Recent Payments</h4>
+        <div class="card" style="margin-bottom: 25px;">
+            <h3 style="margin-bottom: 15px; font-size:18px;">🛒 Collections by Merchant & Employee Sector (Month: {{ month }})</h3>
             <table>
                 <thead>
-                    <tr>
-                        <th>Date (UTC)</th>
-                        <th>Reference</th>
-                        <th>Employee</th>
-                        <th>Sector</th>
-                        <th>Amount</th>
-                    </tr>
+                    <tr><th>Merchant Name</th><th>Employee Sector</th><th>Total Collected Amount</th></tr>
+                </thead>
+                <tbody>
+                    {% for merchant, sectors in merchant_sector_breakdown.items() %}
+                        {% for sector, amount in sectors.items() %}
+                        <tr>
+                            <td style="font-weight:700; color:#2563eb;">{{ merchant }}</td>
+                            <td style="font-weight:600;">{{ sector }}</td>
+                            <td style="font-weight:700; color:#16a34a;">{{ "%.2f"|format(amount) }} ETB</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                    <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No merchant collection records found for this month.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 15px; font-size:18px;">Recent Transactions ({{ month }})</h3>
+            <table>
+                <thead>
+                    <tr><th>Date & Time</th><th>Reference</th><th>Merchant</th><th>Employee</th><th>Sector</th><th>Amount</th></tr>
                 </thead>
                 <tbody>
                     {% for t in transactions %}
                     <tr>
                         <td>{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                         <td><code>{{ t.reference }}</code></td>
-                        <td>{{ t.employee.full_name }}</td>
-                        <td>{{ t.employee.sector }}</td>
-                        <td style="font-weight:700; color:#16a34a;">{{ "%.2f"|format(t.amount) }} ETB</td>
+                        <td style="font-weight:600;">{{ t.merchant_rel.username if t.merchant_rel else 'N/A' }}</td>
+                        <td>{{ t.employee.full_name if t.employee else 'N/A' }}</td>
+                        <td>{{ t.employee.sector if t.employee else 'N/A' }}</td>
+                        <td style="font-weight:700; color:#ef4444;">-{{ "%.2f"|format(t.amount) }} ETB</td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="5" style="text-align: center; color: #94a3b8; padding: 24px;">No payment transactions recorded for this month yet.</td>
-                    </tr>
+                    <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:20px;">No transactions recorded for this month.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
-
 </body>
 </html>
-<a href="{{ url_for('standalone_qr') }}" class="btn btn-blue">📱 Standalone QR System</a>
