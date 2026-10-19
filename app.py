@@ -1032,3 +1032,11 @@ def merchant_scan():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
+# ================= SEPARATE QR CODE SYSTEM =================
+
+@app.route('/standalone_qr')
+def standalone_qr():
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
+    all_emps = Employee.query.all()
+    return render_template('standalone_qr.html', employees=all_emps)
