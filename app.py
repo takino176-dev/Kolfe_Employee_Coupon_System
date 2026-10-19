@@ -1,13 +1,11 @@
 import os
-import uuid
 import secrets
 from datetime import datetime
-from flask import Flask, render_template, redirect, url_for, request, flash, session, send_file
+from flask import Flask, render_template, redirect, url_for, request, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import pandas as pd
-from io import BytesIO
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe_secret_key_2026')
@@ -287,14 +285,13 @@ def merchant_dashboard():
         flash(f'Successfully redeemed {redemption_amount} ETB for {employee.full_name}. Remaining balance: {employee.balance} ETB', 'success')
         return redirect(url_for('merchant_dashboard'))
 
-    return render_template('merchant.html')
+    return render_template('merchants.html')
 
 # ==================== INITIALIZE APP ====================
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-        # Create default admin if none exists
         if not Admin.query.filter_by(username='admin').first():
             default_admin = Admin(
                 username='admin',
