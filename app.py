@@ -59,7 +59,8 @@ def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if session.get('role') != 'admin':
-            flash('Please log in as admin to access this page.', 'danger')
+            session.clear()
+            flash('Access denied. Please log in with an Admin account.', 'danger')
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
@@ -370,41 +371,26 @@ def merchant_dashboard():
 
     return render_template('merchant.html')
 
-# ==================== INITIALIZE APP ====================
+# ==================== INITIALIZE DATABASE & RUN ====================
+
+def init_db():
+    with app.app_context():
+        db.create_all()
+        try:
+            if not Admin.query.filter_by(username='admin').first():
+                default_admin = Admin(
+                    username='admin',
+                    password_hash=generate_password_hash('admin123')
+                )
+                db.session.add(default_admin)
+            if not SystemConfig.query.first():
+                default_config = SystemConfig()
+                db.session.add(default_config)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+
+init_db()
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        try:
-            if not Admin.query.filter_by(username='admin').first():
-                default_admin = Admin(
-                    username='admin',
-                    password_hash=generate_password_hash('admin123')
-                )
-                db.session.add(default_admin)
-            if not SystemConfig.query.first():
-                default_config = SystemConfig()
-                db.session.add(default_config)
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print("DB init error:", e)
     app.run(debug=True)
-else:
-    # For Gunicorn deployment on Render
-    with app.app_context():
-        db.create_all()
-        try:
-            if not Admin.query.filter_by(username='admin').first():
-                default_admin = Admin(
-                    username='admin',
-                    password_hash=generate_password_hash('admin123')
-                )
-                db.session.add(default_admin)
-            if not SystemConfig.query.first():
-                default_config = SystemConfig()
-                db.session.add(default_config)
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            print("DB init error:", e)
