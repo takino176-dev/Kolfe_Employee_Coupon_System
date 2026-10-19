@@ -1,11 +1,13 @@
 import os
 import secrets
+import csv
+import io
 from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, request, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-import pandas as pd
+from openpyxl import load_workbook
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe_secret_key_2026')
@@ -156,19 +158,51 @@ def upload_employees():
             flash('No file uploaded.', 'danger')
             return redirect(request.url)
         try:
-            df = pd.read_excel(file) if file.filename.endswith('.xlsx') else pd.read_csv(file)
-            for _, row in df.iterrows():
-                emp_id = str(row['employee_id'])
-                if not Employee.query.filter_by(employee_id=emp_id).first():
-                    new_emp = Employee(
-                        employee_id=emp_id,
-                        full_name=str(row['full_name']),
-                        sector=str(row['sector']),
-                        monthly_allowance=float(row.get('monthly_allowance', 1000.0)),
-                        balance=float(row.get('monthly_allowance', 1000.0)),
-                        qr_token=secrets.token_urlsafe(16)
-                    )
-                    db.session.add(new_emp)
+            filename = file.filename.lower()
+            if filename.endswith('.xlsx'):
+                wb = load_workbook(file)
+                sheet = wb.active
+                header = [cell.value for cell in sheet[1]]
+                id_idx = header.index('employee_id') if 'employee_id' in header else 0
+                name_idx = header.index('full_name') if 'full_name' in header else 1
+                sector_idx = header.index('sector') if 'sector' in header else 2
+                allowance_idx = header.index('monthly_allowance') if 'monthly_allowance' in header else None
+
+                for row in sheet.iter_rows(min_row=2, values_only=True):
+                    if not row[id_idx]:
+                        continue
+                    emp_id = str(row[id_idx])
+                    full_name = str(row[name_idx])
+                    sector = str(row[sector_idx])
+                    allowance = float(row[allowance_idx]) if allowance_idx is not None and row[allowance_idx] is not None else 1000.0
+
+                    if not Employee.query.filter_by(employee_id=emp_id).first():
+                        new_emp = Employee(
+                            employee_id=emp_id,
+                            full_name=full_name,
+                            sector=sector,
+                            monthly_allowance=allowance,
+                            balance=allowance,
+                            qr_token=secrets.token_urlsafe(16)
+                        )
+                        db.session.add(new_emp)
+            else:
+                stream = io.TextIOWrapper(file.stream, encoding='utf-8')
+                reader = csv.DictReader(stream)
+                for row in reader:
+                    emp_id = str(row.get('employee_id'))
+                    if not emp_id:
+                        continue
+                    if not Employee.query.filter_by(employee_id=emp_id).first():
+                        new_emp = Employee(
+                            employee_id=emp_id,
+                            full_name=str(row.get('full_name')),
+                            sector=str(row.get('sector')),
+                            monthly_allowance=float(row.get('monthly_allowance', 1000.0)),
+                            balance=float(row.get('monthly_allowance', 1000.0)),
+                            qr_token=secrets.token_urlsafe(16)
+                        )
+                        db.session.add(new_emp)
             db.session.commit()
             flash('Employees uploaded successfully.', 'success')
             return redirect(url_for('employees'))
@@ -285,7 +319,7 @@ def merchant_dashboard():
         flash(f'Successfully redeemed {redemption_amount} ETB for {employee.full_name}. Remaining balance: {employee.balance} ETB', 'success')
         return redirect(url_for('merchant_dashboard'))
 
-    return render_template('merchants.html')
+    return render_template('merchant.html')
 
 # ==================== INITIALIZE APP ====================
 
