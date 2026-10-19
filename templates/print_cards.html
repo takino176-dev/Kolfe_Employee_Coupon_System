@@ -2,12 +2,12 @@
 <html lang="am">
 <head>
     <meta charset="UTF-8">
-    <title>Print Official Coupon Cards</title>
+    <title>የኩፖን ማተሚያ ገፅ</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; padding: 15px; color: #000000; }
 
-        /* Control Panel (Hidden during printing) */
+        /* የመቆጣጠሪያ ሳጥን (በማተሚያ ወቅት አይታይም) */
         .control-panel {
             background: #ffffff;
             padding: 18px 24px;
@@ -44,16 +44,16 @@
         .btn-blue { background: #2563eb; }
         .btn-dark { background: #475569; }
 
-        /* Grid Layout: 22 items per page in Landscape */
+        /* ማተሚያ ሰንጠረዥ - በገጽ 22 ኩፖን (ላንድስኬፕ) */
         .print-grid {
             display: grid;
-            grid-template-columns: repeat(6, 1fr); /* 6 columns */
+            grid-template-columns: repeat(6, 1fr);
             gap: 6px;
             width: 100%;
             margin: 0 auto;
         }
 
-        /* Official Coupon Card matching your paper layout */
+        /* የኩፖኑ ቅርፅ */
         .coupon-card {
             background: #ffffff;
             border: 1.5px solid #000000;
@@ -85,7 +85,7 @@
         .month-note { font-size: 7.5px; font-weight: bold; margin-bottom: 2px; }
         .price-tag { font-size: 9px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px; margin-top: 2px; }
 
-        /* Landscape Print Setup */
+        /* የህትመት ቅንብር */
         @media print {
             @page {
                 size: A4 landscape;
@@ -106,34 +106,33 @@
 </head>
 <body>
 
-    <!-- Control Panel -->
+    <!-- የመቆጣጠሪያ ክፍል -->
     <div class="control-panel no-print">
         <div class="control-group">
-            <label for="monthInput">🗓️ Set Month (ለወሩ):</label>
-            <input type="text" id="monthInput" value="ጥቅምት ወር 2019 ዓ.ም" oninput="generateCards()" style="width: 200px;">
+            <label for="monthInput">🗓️ ወር ያስገቡ:</label>
+            <input type="text" id="monthInput" value="የጥቅምት ወር 2019 ዓ.ም" oninput="generateCards()" style="width: 220px;">
         </div>
 
         <div class="control-group">
-            <label for="countInput">📄 Number of Coupons (1 to 22 Max):</label>
+            <label for="countInput">📄 የኩፖን ብዛት (ከ 1 እስከ 22):</label>
             <input type="number" id="countInput" value="22" min="1" max="22" oninput="generateCards()" style="width: 140px;">
         </div>
 
         <div>
-            <button onclick="window.print()" class="btn btn-blue">🖨️ Print Landscape Pages</button>
-            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-dark" style="margin-left: 8px;">Back</a>
+            <button onclick="window.print()" class="btn btn-blue">🖨️ አትም (Print)</button>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-dark" style="margin-left: 8px;">ተመለስ</a>
         </div>
     </div>
 
-    <!-- Printable Grid Container -->
+    <!-- የኩፖኖች ማተሚያ ቦታ -->
     <div id="printGrid" class="print-grid"></div>
 
     <script>
-        // Employee data passed from Flask bulk upload
+        // ከኤክሴል ፋይል የመጡ የሰራተኞች መረጃዎች
         const rawEmployees = [
             {% for emp in employees %}
             {
                 id: "{{ emp.id }}",
-                employee_id: "{{ emp.employee_id }}",
                 full_name: "{{ emp.full_name }}",
                 sector: "{{ emp.sector }}"
             }{% if not loop.last %},{% endif %}
@@ -142,13 +141,13 @@
 
         function generateCards() {
             const grid = document.getElementById('printGrid');
-            grid.innerHTML = ''; // Clear previous cards
+            grid.innerHTML = '';
             
             let couponCount = parseInt(document.getElementById('countInput').value) || 1;
-            if (couponCount > 22) couponCount = 22; // Limit max per page to 22
+            if (couponCount > 22) couponCount = 22;
             if (couponCount < 1) couponCount = 1;
 
-            const selectedMonth = document.getElementById('monthInput').value || 'ጥቅምት ወር 2019 ዓ.ም';
+            const selectedMonth = document.getElementById('monthInput').value || 'የጥቅምት ወር 2019 ዓ.ም';
 
             rawEmployees.forEach(emp => {
                 for (let i = 0; i < couponCount; i++) {
@@ -159,7 +158,7 @@
                         <div>
                             <div class="header-title">በኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር</div>
                             <div class="dept-title">ዲዛይንና ግንባታ ፅ/ቤት</div>
-                            <div class="coupon-title">የሰራተኞች የሀብ መስተንግዶ ኩፖን</div>
+                            <div class="coupon-title">የሰራተኞች የህብ መስተንግዶ ኩፖን</div>
                         </div>
 
                         <div class="info-block">
@@ -169,7 +168,7 @@
 
                         <div>
                             <div class="validity-note">ለአንድ ጊዜ አገልግሎት ብቻ የሚውል</div>
-                            <div class="month-note">ለአገልግሎቱ በወጣው የ${selectedMonth} ብቻ የሚያገለግል</div>
+                            <div class="month-note">ለአገልግሎቱ በወጣው ${selectedMonth} ብቻ የሚያገለግል</div>
                             <div class="price-tag">የኩፖኑ ዋጋ 40 ብር</div>
                         </div>
                     `;
@@ -179,7 +178,6 @@
             });
         }
 
-        // Initialize cards on load
         window.onload = function() {
             generateCards();
         };
