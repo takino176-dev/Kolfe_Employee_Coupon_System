@@ -44,6 +44,26 @@
         .btn-blue { background: #2563eb; }
         .btn-dark { background: #475569; }
 
+        /* Each Employee gets their own strictly separated page container */
+        .employee-page {
+            width: 100%;
+            margin-bottom: 30px;
+            page-break-inside: avoid;
+        }
+
+        /* Force each new employee onto a brand new page when printing */
+        @media print {
+            .employee-page {
+                page-break-before: always !important;
+                break-before: page !important;
+                margin-bottom: 0 !important;
+            }
+            .employee-page:first-child {
+                page-break-before: auto !important;
+                break-before: auto !important;
+            }
+        }
+
         /* ማተሚያ ሰንጠረዥ - በገጽ 22 ኩፖን (ላንድስኬፕ) */
         .print-grid {
             display: grid;
@@ -124,11 +144,11 @@
         </div>
     </div>
 
-    <!-- የኩፖኖች ማተሚያ ቦታ -->
-    <div id="printGrid" class="print-grid"></div>
+    <!-- Container where all pages will render -->
+    <div id="printContainer"></div>
 
     <script>
-        // ከኤክሴል ፋይል የመጡ የሰራተኞች መረጃዎች
+        // Data from backend
         const rawEmployees = [
             {% for emp in employees %}
             {
@@ -140,8 +160,8 @@
         ];
 
         function generateCards() {
-            const grid = document.getElementById('printGrid');
-            grid.innerHTML = '';
+            const container = document.getElementById('printContainer');
+            container.innerHTML = '';
             
             let couponCount = parseInt(document.getElementById('countInput').value) || 1;
             if (couponCount > 22) couponCount = 22;
@@ -150,6 +170,13 @@
             const selectedMonth = document.getElementById('monthInput').value || 'የጥቅምት ወር 2019 ዓ.ም';
 
             rawEmployees.forEach(emp => {
+                // Wrapper page div per employee
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'employee-page';
+
+                const gridDiv = document.createElement('div');
+                gridDiv.className = 'print-grid';
+
                 for (let i = 0; i < couponCount; i++) {
                     const cardDiv = document.createElement('div');
                     cardDiv.className = 'coupon-card';
@@ -173,8 +200,11 @@
                         </div>
                     `;
 
-                    grid.appendChild(cardDiv);
+                    gridDiv.appendChild(cardDiv);
                 }
+
+                pageDiv.appendChild(gridDiv);
+                container.appendChild(pageDiv);
             });
         }
 
