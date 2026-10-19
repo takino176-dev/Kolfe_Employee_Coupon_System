@@ -222,6 +222,333 @@ def admin_dashboard():
                 <a href="{{ url_for('upload_employees') }}" class="btn btn-dark">Bulk Excel Upload</a>
                 <a href="{{ url_for('allocations') }}" class="btn" style="background:#b45309;">Release Allocations</a>
                 <a href="{{ url_for('print_cards') }}" class="btn btn-dark">Print QR Cards</a>
+                <a href="{{ url_for('standalone_qr_print') }}" class="btn" style="background:#0284c7;">Print Standalone QR</a>
+                <a href="{{ url_for('qrlist') }}" class="btn btn-dark">Export QR List</a>
+                <a href="{{ url_for('reports_csv') }}?month={{ month }}" class="btn btn-red">Export Monthly Sector Report (CSV)</a>
+            </div>
+
+            <div class="card" style="margin-bottom: 25px;">
+                <h3 style="margin-bottom: 15px; font-size:18px;">🛒 Collections by Merchant & Employee Sector (Month: {{ month }})</h3>
+                <table>
+                    <thead>
+                        <tr><th>Merchant Name</th><th>Employee Sector</th><th>Total Collected Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for merchant, sectors in merchant_sector_breakdown.items() %}
+                            {% for sector, amount in sectors.items() %}
+                            <tr>
+                                <td style="font-weight:700; color:#2563eb;">{{ merchant }}</td>
+                                <td style="font-weight:600;">{{ sector }}</td>
+                                <td style="font-weight:700; color:#16a34a;">{{ "%.2f"|format(amount) }} ETB</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No merchant collection records found for this month.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 15px; font-size:18px;">Recent Transactions ({{ month }})</h3>
+                <table>
+                    <thead>
+                        <tr><th>Date & Time</th><th>Reference</th><th>Merchant</th><th>Employee</th><th>Sector</th><th>Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for t in transactions %}
+                        <tr>
+                            <td>{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td><code>{{ t.reference }}</code></td>
+                            <td style="font-weight:600;">{{ t.merchant_rel.username if t.merchant_rel else 'N/A' }}</td>
+                            <td>{{ t.employee.full_name if t.employee else 'N/A' }}</td>
+                            <td>{{ t.employee.sector if t.employee else 'N/A' }}</td>
+                            <td style="font-weight:700; color:#ef4444;">-{{ "%.2f"|format(t.amount) }} ETB</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" style="text-align:center; color:#94a3b8; padding:20px;">No transactions recorded for this month.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(ADMIN_HTML, month=month, employees=employees_count, 
+                           allocated=total_allocated, spent=total_spent, 
+                           merchant_sector_breakdown=merchant_sector_breakdown, transactions=recent_transactions)
+
+@app.route('/admin/change_password', methods=['GET', 'POST'])
+def admin_change_password():
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    if request.method == 'POST':
+        new_password = request.form.get('new_password')
+        admin = User.query.get(session.get('user_id'))
+        if admin and new_password:
+            admin.password = generate_password_hash(new_password)
+            db.session.commit()
+            flash('Admin password updated successfully!', 'success')
+            return redirect(url_for('admin_dashboard'))
+    return render_template('admin_password.html')
+
+# ================= EMPLOYEE MANAGEMENT & BULK ACTIONS =================
+
+@app.route('/employees')
+def employees():
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    all_emps = Employee.query.all()
+    sectors = sorted(list(set(e.sector for e in all_emps if e.sector)))
+    
+    EMPLOYEES_HTML = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Manage Employees</title>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background: #f1f5f9; color: #334155; }
+            .card { background: #fff; padding: 24px; border-radius: 12px; max-width: 1000px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; }
+            th { background: #f8fafc; padding: 12px; font-size: 13px; border-bottom: 2px solid #e2e8f0; }
+            td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
+            .btn { text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #fff; border: none; cursor: pointer; display: inline-block; }
+            .btn-blue { background: #2563eb; }
+            .btn-red { background: #dc2626; }
+            .btn-amber { background: #d97706; }
+            .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; background: #dcfce7; color: #15803d; font-weight: bold; }
+            .bulk-barየተሟሉትን ሁሉንም አስፈላጊ የመተግበሪያ ፋይሎች (Both `app.py` and Template files) ከዚህ በታች በአንድ ላይ አዘጋጅቼልሃለሁ።
+
+---
+
+### 1. `app.py` (የፓይተን ዋና ኮድ)
+
+```python
+import os
+import secrets
+import csv
+import io
+import openpyxl
+from datetime import datetime
+from flask import Flask, render_template, render_template_string, request, redirect, url_for, flash, session, send_file
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
+
+app = Flask(__name__, template_folder=TEMPLATE_DIR)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe-secret-key-2026')
+
+db_path = os.path.join(BASE_DIR, 'coupon_system.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', f'sqlite:///{db_path}')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=True)
+    role = db.Column(db.String(20), nullable=False)
+    is_first_login = db.Column(db.Boolean, default=True)
+
+class Employee(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.String(50), unique=True, nullable=False)
+    full_name = db.Column(db.String(120), nullable=False)
+    sector = db.Column(db.String(120), nullable=False)
+    qr_token = db.Column(db.String(100), unique=True, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    user = db.relationship('User', backref='employee_profiles')
+    transactions = db.relationship('Transaction', backref='employee', cascade='all, delete-orphan', lazy=True)
+
+class CouponAllocation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
+    month = db.Column(db.String(20), nullable=False)
+    amount = db.Column(db.Float, nullable=False, default=0.0)
+
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    reference = db.Column(db.String(100), unique=True, nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id', ondelete='CASCADE'), nullable=False)
+    merchant_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    month = db.Column(db.String(20), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    merchant_rel = db.relationship('User', backref='merchant_transactions')
+
+with app.app_context():
+    db.create_all()
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return f"<h2 style='color:red; font-family:Arial;'>Application Error:</h2><pre>{str(e)}</pre>", 500
+
+# ================= AUTHENTICATION =================
+
+@app.route('/')
+def index():
+    if 'user_id' in session:
+        role = session.get('role')
+        if role in ['admin', 'superadmin']: return redirect(url_for('admin_dashboard'))
+        elif role == 'merchant': return redirect(url_for('merchant_dashboard'))
+        elif role == 'employee': return redirect(url_for('employee_dashboard'))
+    if User.query.filter_by(role='admin').first():
+        return redirect(url_for('login'))
+    return redirect(url_for('setup'))
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    if User.query.filter_by(role='admin').first():
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password')
+        if username and password:
+            admin = User(username=username, password=generate_password_hash(password), role='admin', is_first_login=False)
+            db.session.add(admin)
+            db.session.commit()
+            flash('Admin account created successfully!', 'success')
+            return redirect(url_for('login'))
+    return render_template('setup.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        
+        user = User.query.filter_by(username=username).first()
+        if user:
+            if user.role == 'employee' and user.is_first_login:
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session['role'] = 'employee'
+                flash('First login detected! Please set your new personal password.', 'info')
+                return redirect(url_for('employee_change_password'))
+
+            if user.password and check_password_hash(user.password, password):
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session['role'] = user.role
+                flash('Logged in successfully.', 'success')
+                if user.role in ['admin', 'superadmin']: return redirect(url_for('admin_dashboard'))
+                elif user.role == 'merchant': return redirect(url_for('merchant_dashboard'))
+                elif user.role == 'employee': return redirect(url_for('employee_dashboard'))
+            else:
+                flash('Invalid password for this account.', 'danger')
+        else:
+            flash('Invalid Employee ID or Username.', 'danger')
+
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('Logged out successfully.', 'info')
+    return redirect(url_for('login'))
+
+# ================= ADMIN DASHBOARD =================
+
+@app.route('/dashboard')
+@app.route('/admin')
+def admin_dashboard():
+    if session.get('role') not in ['admin', 'superadmin']:
+        return redirect(url_for('login'))
+    month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
+    employees_count = Employee.query.count()
+    allocations = CouponAllocation.query.filter_by(month=month).all()
+    total_allocated = sum(a.amount for a in allocations)
+    transactions = Transaction.query.filter_by(month=month).all()
+    total_spent = sum(t.amount for t in transactions)
+    recent_transactions = Transaction.query.order_by(Transaction.created_at.desc()).limit(10).all()
+
+    merchant_sector_breakdown = {}
+    for t in transactions:
+        merchant_name = t.merchant_rel.username if t.merchant_rel else 'Unknown Merchant'
+        sector_name = t.employee.sector if t.employee and t.employee.sector else 'Unassigned'
+        if merchant_name not in merchant_sector_breakdown:
+            merchant_sector_breakdown[merchant_name] = {}
+        merchant_sector_breakdown[merchant_name][sector_name] = merchant_sector_breakdown[merchant_name].get(sector_name, 0.0) + t.amount
+
+    ADMIN_HTML = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Admin Dashboard - Kolfe Coupon System</title>
+        <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+            body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
+            .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; color: #fff; }
+            .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 25px; }
+            .card { background: #ffffff; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+            .actions-bar { background: #ffffff; padding: 20px; border-radius: 12px; margin-bottom: 25px; display: flex; flex-wrap: wrap; gap: 10px; }
+            .btn { text-decoration: none; padding: 10px 16px; border-radius: 6px; font-weight: 600; font-size: 14px; color: #fff; border: none; cursor: pointer; display: inline-block; }
+            .btn-blue { background: #2563eb; }
+            .btn-green { background: #16a34a; }
+            .btn-dark { background: #475569; }
+            .btn-red { background: #dc2626; }
+            table { width: 100%; border-collapse: collapse; text-align: left; background: #fff; border-radius: 12px; overflow: hidden; margin-bottom: 25px; }
+            th { background-color: #f8fafc; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
+            td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+            .alert { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 700; background-color: #dcfce7; color: #15803d; }
+        </style>
+    </head>
+    <body>
+        <nav class="navbar">
+            <h2>👑 Admin Control Dashboard</h2>
+            <div>
+                <a href="{{ url_for('admin_change_password') }}" style="color:#38bdf8; text-decoration:none; margin-right:15px; font-weight:600;">🔐 Change Password</a>
+                <a href="{{ url_for('logout') }}" class="btn btn-red" style="padding:6px 12px;">Logout</a>
+            </div>
+        </nav>
+
+        <div class="container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="GET" class="card" style="margin-bottom: 25px; display:flex; gap:15px; align-items:center;">
+                <label style="font-weight:700;">Select Month (Ethiopian/Standard):</label>
+                <input type="text" name="month" value="{{ month }}" style="padding:8px; border:1px solid #cbd5e1; border-radius:6px;">
+                <button type="submit" class="btn btn-blue" style="padding:8px 16px;">Filter Month Data</button>
+            </form>
+
+            <div class="grid">
+                <div class="card" style="border-top: 4px solid #2563eb;">
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Total Employees</h6>
+                    <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ employees }}</h3>
+                </div>
+                <div class="card" style="border-top: 4px solid #d97706;">
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Released Allocation ({{ month }})</h6>
+                    <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(allocated) }} ETB</h3>
+                </div>
+                <div class="card" style="border-top: 4px solid #ef4444;">
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Total Spent ({{ month }})</h6>
+                    <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(spent) }} ETB</h3>
+                </div>
+                <div class="card" style="border-top: 4px solid #16a34a;">
+                    <h6 style="color:#64748b; font-size:12px; font-weight:700; text-transform:uppercase;">Merchant Collected ({{ month }})</h6>
+                    <h3 style="font-size:26px; font-weight:800; margin-top:5px;">{{ "%.2f"|format(spent) }} ETB</h3>
+                </div>
+            </div>
+
+            <div class="actions-bar">
+                <a href="{{ url_for('add_employee') }}" class="btn btn-blue">+ Add Employee</a>
+                <a href="{{ url_for('employees') }}" class="btn btn-dark">Manage & Bulk Delete Employees</a>
+                <a href="{{ url_for('merchants') }}" class="btn btn-green">Manage Merchants</a>
+                <a href="{{ url_for('upload_employees') }}" class="btn btn-dark">Bulk Excel Upload</a>
+                <a href="{{ url_for('allocations') }}" class="btn" style="background:#b45309;">Release Allocations</a>
+                <a href="{{ url_for('print_cards') }}" class="btn btn-dark">Print QR Cards</a>
+                <a href="{{ url_for('standalone_qr_print') }}" class="btn" style="background:#0284c7;">Print Standalone QR</a>
                 <a href="{{ url_for('qrlist') }}" class="btn btn-dark">Export QR List</a>
                 <a href="{{ url_for('reports_csv') }}?month={{ month }}" class="btn btn-red">Export Monthly Sector Report (CSV)</a>
             </div>
@@ -839,6 +1166,13 @@ def print_single_card(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     return render_template('print_cards.html', employees=[emp], single=True)
 
+@app.route('/standalone_qr_print')
+def standalone_qr_print():
+    if session.get('role') not in ['admin', 'superadmin']: 
+        return redirect(url_for('login'))
+    all_emps = Employee.query.all()
+    return render_template('standalone_qr_print.html', employees=all_emps)
+
 @app.route('/qrlist')
 def qrlist():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
@@ -895,7 +1229,7 @@ def employee_dashboard():
     <head>
         <meta charset="UTF-8">
         <title>Employee Portal</title>
-        <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+        <script src="[https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js](https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js)"></script>
         <style>
             * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
             body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
@@ -1032,11 +1366,3 @@ def merchant_scan():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-# ================= SEPARATE QR CODE SYSTEM =================
-
-@app.route('/standalone_qr')
-def standalone_qr():
-    if session.get('role') not in ['admin', 'superadmin']: 
-        return redirect(url_for('login'))
-    all_emps = Employee.query.all()
-    return render_template('standalone_qr.html', employees=all_emps)

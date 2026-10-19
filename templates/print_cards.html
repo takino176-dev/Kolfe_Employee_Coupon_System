@@ -3,13 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>የኩፖን ማተሚያ ገፅ</title>
-    <!-- የ QR ኮድ ማመንጫ ላይብረሪ -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="[https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js](https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js)"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; padding: 15px; color: #000000; }
 
-        /* የመቆጣጠሪያ ሳጥን (በማተሚያ ወቅት አይታይም) */
         .control-panel {
             background: #ffffff;
             padding: 18px 24px;
@@ -46,7 +44,6 @@
         .btn-blue { background: #2563eb; }
         .btn-dark { background: #475569; }
 
-        /* እያንዳንዱ ሰራተኛ የራሱ የተለየ ማተሚያ ገጽ ይኖረዋል */
         .employee-page {
             width: 100%;
             margin-bottom: 30px;
@@ -65,7 +62,6 @@
             }
         }
 
-        /* ማተሚያ ሰንጠረዥ - በገጽ 22 ኩፖን (ላንድስኬፕ) */
         .print-grid {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
@@ -74,7 +70,6 @@
             margin: 0 auto;
         }
 
-        /* የኩፖኑ ቅርፅ */
         .coupon-card {
             background: #ffffff;
             border: 1.5px solid #000000;
@@ -113,7 +108,6 @@
         .month-note { font-size: 7px; font-weight: bold; margin-bottom: 1px; }
         .price-tag { font-size: 8.5px; font-weight: bold; border-top: 1px solid #000; padding-top: 2px; margin-top: 1px; }
 
-        /* የህትመት ቅንብር */
         @media print {
             @page {
                 size: A4 landscape;
@@ -134,7 +128,6 @@
 </head>
 <body>
 
-    <!-- የመቆጣጠሪያ ክፍል -->
     <div class="control-panel no-print">
         <div class="control-group">
             <label for="monthInput">🗓️ ወር ያስገቡ:</label>
@@ -152,7 +145,6 @@
         </div>
     </div>
 
-    <!-- ማተሚያ ቦታ -->
     <div id="printContainer"></div>
 
     <script>

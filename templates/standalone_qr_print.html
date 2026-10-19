@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="am">
+<head>
+    <meta charset="UTF-8">
+    <title>የሰራተኞች QR ኮድ ማተሚያ</title>
+    <script src="[https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js](https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js)"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; padding: 20px; color: #1e293b; }
+
+        .control-panel {
+            background: #ffffff;
+            padding: 18px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+            max-width: 1000px;
+            margin: 0 auto 25px auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-blue { background: #2563eb; }
+        .btn-dark { background: #475569; }
+
+        .qr-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .qr-card {
+            background: #ffffff;
+            border: 1.5px solid #000;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            page-break-inside: avoid;
+        }
+
+        .emp-name { font-size: 13px; font-weight: bold; color: #000; margin-bottom: 4px; }
+        .emp-detail { font-size: 11px; color: #333; margin-bottom: 2px; }
+
+        .qr-box {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 10px 0;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: none; padding: 0; }
+            .qr-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 15px;
+            }
+            .qr-card {
+                border: 1.5px solid #000;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="control-panel no-print">
+        <div>
+            <h2>📱 የሰራተኞች QR ኮድ ማተሚያ ገፅ</h2>
+            <p style="font-size:12px; color:#64748b;">የሰራተኛው ሙሉ ስም፣ መታወቂያ እና ዘርፍ በ QR ኮድ ውስጥ የተካተተበት</p>
+        </div>
+        <div>
+            <button onclick="window.print()" class="btn btn-blue">🖨️ QR ኮዶችን አትም</button>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-dark" style="margin-left:8px;">ተመለስ</a>
+        </div>
+    </div>
+
+    <div class="qr-grid">
+        {% for emp in employees %}
+        <div class="qr-card">
+            <div class="emp-name">{{ emp.full_name }}</div>
+            <div class="emp-detail"><strong>መታወቂያ:</strong> {{ emp.employee_id }}</div>
+            <div class="emp-detail"><strong>ዘርፍ:</strong> {{ emp.sector }}</div>
+
+            <div class="qr-box">
+                <div id="standalone-qr-{{ emp.id }}"></div>
+            </div>
+
+            <div style="font-size:9px; font-family:monospace; color:#555;">
+                Token: {{ emp.qr_token }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        const employeesList = [
+            {% for emp in employees %}
+            {
+                id: "{{ emp.id }}",
+                employee_id: "{{ emp.employee_id }}",
+                full_name: "{{ emp.full_name }}",
+                sector: "{{ emp.sector }}",
+                qr_token: "{{ emp.qr_token }}"
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        window.onload = function() {
+            employeesList.forEach(emp => {
+                const qrText = `ስም: ${emp.full_name}\nመታወቂያ: ${emp.employee_id}\nዘርፍ: ${emp.sector}\nቶከን: ${emp.qr_token}`;
+                
+                new QRCode(document.getElementById(`standalone-qr-${emp.id}`), {
+                    text: qrText,
+                    width: 100,
+                    height: 100
+                });
+            });
+        };
+    </script>
+</body>
+</html>
