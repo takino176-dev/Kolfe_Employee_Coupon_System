@@ -2,179 +2,65 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Merchant POS Portal - Kolfe Coupon System</title>
-    <!-- Include HTML5 QR Code Scanner Library -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <title>Merchant Management - Kolfe Coupon System</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #f1f5f9; color: #334155; padding-bottom: 50px; }
-        
-        .navbar { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .navbar-brand { color: #ffffff; font-size: 20px; font-weight: 700; }
-        .user-info { color: #cbd5e1; font-size: 14px; font-weight: 600; margin-right: 15px; }
-        .nav-btn { text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; color: #ffffff; background: #ef4444; border: none; }
-        .nav-btn:hover { background: #dc2626; }
-
-        .container { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
-        .header-title { font-size: 26px; font-weight: 800; color: #0f172a; margin-bottom: 20px; }
-
-        .metric-card { background: #ffffff; padding: 22px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border-top: 4px solid #16a34a; margin-bottom: 24px; }
-        .metric-card h6 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 700; margin-bottom: 6px; }
-        .metric-card h3 { font-size: 32px; font-weight: 800; color: #15803d; }
-
-        .card { background: #ffffff; padding: 28px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 28px; }
-        .card h4 { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 18px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
-
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; font-weight: 700; color: #475569; margin-bottom: 8px; font-size: 14px; }
-        .form-control { width: 100%; padding: 12px 16px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 16px; outline: none; transition: border-color 0.2s; }
-        .form-control:focus { border-color: #2563eb; }
-
-        .btn-submit { width: 100%; padding: 14px; background: linear-gradient(135deg, #16a34a, #15803d); color: #ffffff; border: none; border-radius: 8px; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(22, 163, 74, 0.3); transition: transform 0.2s, opacity 0.2s; }
-        .btn-submit:hover { opacity: 0.95; transform: translateY(-1px); }
-
-        #reader { width: 100%; max-width: 500px; margin: 0 auto 20px auto; border-radius: 8px; overflow: hidden; display: none; }
-        .btn-scan-toggle { background: #2563eb; color: #white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 700; cursor: pointer; margin-bottom: 15px; color: white; }
-        .btn-scan-toggle:hover { background: #1d4ed8; }
-
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th { background-color: #f8fafc; padding: 12px 16px; font-size: 13px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
-        td { padding: 14px 16px; border-bottom: 1px solid #f1f5f9; font-size: 14px; color: #334155; }
-        tr:hover { background-color: #f8fafc; }
-
-        .alert { padding: 14px 18px; border-radius: 8px; margin-bottom: 20px; font-weight: 700; font-size: 15px; }
-        .alert-success { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
-        .alert-danger { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+        body { background-color: #f1f5f9; color: #334155; padding: 30px; }
+        .card { background: #fff; padding: 24px; border-radius: 12px; max-width: 800px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; }
+        th { background: #f8fafc; padding: 12px; font-size: 13px; border-bottom: 2px solid #e2e8f0; color: #475569; }
+        td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .btn { text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #fff; border: none; cursor: pointer; display: inline-block; }
+        .btn-blue { background: #2563eb; }
+        .btn-red { background: #dc2626; }
+        .btn-amber { background: #d97706; }
+        .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; background: #dcfce7; color: #15803d; font-weight: bold; }
     </style>
 </head>
 <body>
-
-    <nav class="navbar">
-        <div class="navbar-brand">🏪 Kolfe Merchant POS Terminal</div>
-        <div>
-            <span class="user-info">Logged in: {{ session.get('username') }}</span>
-            <a href="{{ url_for('logout') }}" class="nav-btn">Logout</a>
+    <div class="card">
+        <h2>🛒 Merchant Management</h2>
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+            <a href="{{ url_for('create_merchant') }}" class="btn btn-blue">+ Add New Merchant</a>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background:#64748b;">← Back to Dashboard</a>
         </div>
-    </nav>
-
-    <div class="container">
-        <h2 class="header-title">Point of Sale & QR Scanner</h2>
-
+        <hr style="margin: 20px 0; border:0; border-top:1px solid #e2e8f0;">
+        
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category if category != 'error' else 'danger' }}">
-                        {{ message }}
-                    </div>
+                    <div class="alert">{{ message }}</div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
 
-        <div class="metric-card">
-            <h6>Total Collected (This Month: {{ month }})</h6>
-            <h3>{{ "%.2f"|format(total_collected) }} ETB</h3>
-        </div>
-
-        <div class="card">
-            <h4>Redeem Employee Coupon</h4>
-            
-            <!-- Camera Scanner Toggle -->
-            <button type="button" id="toggleScanner" class="btn-scan-toggle" onclick="toggleCameraScanner()">📸 Open Camera QR Scanner</button>
-            <div id="reader"></div>
-
-            <form action="{{ url_for('merchant_scan') }}" method="POST">
-                <div class="form-group">
-                    <label for="qr_token">Employee QR Token:</label>
-                    <input type="text" id="qr_token" name="qr_token" class="form-control" placeholder="Scan QR or type token here..." required autocomplete="off">
-                </div>
-
-                <div class="form-group">
-                    <label for="amount">Transaction Amount (ETB):</label>
-                    <input type="number" step="0.01" min="0.01" id="amount" name="amount" class="form-control" placeholder="e.g. 150.00" required>
-                </div>
-
-                <button type="submit" class="btn-submit">💳 Verify & Process Redemption</button>
-            </form>
-        </div>
-
-        <div class="card">
-            <h4>Live Settlement History ({{ month }})</h4>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date & Time</th>
-                        <th>Reference Code</th>
-                        <th>Employee ID</th>
-                        <th>Amount Collected</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for t in transactions %}
-                    <tr>
-                        <td>{{ t.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                        <td><code>{{ t.reference }}</code></td>
-                        <td><strong>{{ t.employee.employee_id }}</strong> ({{ t.employee.full_name }})</td>
-                        <td style="font-weight: 800; color: #16a34a;">{{ "%.2f"|format(t.amount) }} ETB</td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="4" style="text-align: center; color: #94a3b8; padding: 24px;">No transactions recorded for this month yet.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in merchants %}
+                <tr>
+                    <td style="font-weight: 600;">{{ m.username }}</td>
+                    <td>
+                        <form action="{{ url_for('reset_merchant_password', merchant_id=m.id) }}" method="POST" style="display:inline; margin-right:5px;" onsubmit="return confirm('Reset password for {{ m.username }}?');">
+                            <button type="submit" class="btn btn-amber">Reset Password</button>
+                        </form>
+                        <form action="{{ url_for('delete_merchant', merchant_id=m.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete merchant {{ m.username }}?');">
+                            <button type="submit" class="btn btn-red">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="2" style="text-align:center; color:#94a3b8; padding:20px;">No merchants found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
-
-    <script>
-        let html5QrCode = null;
-        let scannerIsRunning = false;
-
-        function toggleCameraScanner() {
-            const readerDiv = document.getElementById('reader');
-            const toggleBtn = document.getElementById('toggleScanner');
-
-            if (!scannerIsRunning) {
-                readerDiv.style.display = 'block';
-                toggleBtn.innerText = '❌ Close Camera Scanner';
-                
-                html5QrCode = new Html5Qrcode("reader");
-                html5QrCode.start(
-                    { facingMode: "environment" },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
-                    (decodedText, decodedResult) => {
-                        // Automatically fill the scanned token into the input field
-                        document.getElementById('qr_token').value = decodedText;
-                        // Stop scanner after successful scan
-                        stopCameraScanner();
-                        alert("QR Code scanned successfully!");
-                    },
-                    (errorMessage) => {
-                        // Scanning framing errors can be ignored safely
-                    }
-                ).catch((err) => {
-                    alert("Unable to access camera. Please check camera permissions.");
-                    readerDiv.style.display = 'none';
-                    toggleBtn.innerText = '📸 Open Camera QR Scanner';
-                });
-                scannerIsRunning = true;
-            } else {
-                stopCameraScanner();
-            }
-        }
-
-        function stopCameraScanner() {
-            if (html5QrCode && scannerIsRunning) {
-                html5QrCode.stop().then(() => {
-                    document.getElementById('reader').style.display = 'none';
-                    document.getElementById('toggleScanner').innerText = '📸 Open Camera QR Scanner';
-                    scannerIsRunning = false;
-                }).catch(err => {
-                    console.error("Failed to stop scanner.", err);
-                });
-            }
-        }
-    </script>
 </body>
 </html>
