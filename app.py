@@ -153,7 +153,7 @@ def admin_dashboard():
         merchant_sector_breakdown[merchant_name][sector_name] = merchant_sector_breakdown[merchant_name].get(sector_name, 0.0) + t.amount
 
     return render_template('admin.html', month=month, employees=employees_count, 
-                           allocated=total_allocated, spent=total_spent, 
+                           allocated=total_allocated, spent=total_spent, collected=total_spent,
                            merchant_sector_breakdown=merchant_sector_breakdown, transactions=recent_transactions)
 
 @app.route('/admin/change_password', methods=['GET', 'POST'])
