@@ -1,42 +1,185 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="am">
 <head>
     <meta charset="UTF-8">
-    <title>Print Employee QR Cards</title>
+    <title>Print Official Coupon Cards</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
-        .no-print { text-align: center; margin-bottom: 20px; }
-        .card-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
-        .qr-card { background: white; border: 2px dashed #333; border-radius: 10px; width: 300px; padding: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); page-break-inside: avoid; }
-        .qr-card h3 { margin: 5px 0; color: #1e293b; }
-        .qr-card p { margin: 5px 0; color: #64748b; font-size: 14px; }
-        .qr-card img { margin: 15px 0; width: 140px; height: 140px; }
-        .btn { padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; font-size: 16px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; padding: 15px; color: #000000; }
+
+        .control-panel {
+            background: #ffffff;
+            padding: 18px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+            max-width: 950px;
+            margin: 0 auto 20px auto;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 4px; }
+        .control-group label { font-size: 13px; font-weight: bold; color: #475569; }
+        .control-group input, .control-group select {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-blue { background: #2563eb; }
+        .btn-dark { background: #475569; }
+
+        .print-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .coupon-card {
+            background: #ffffff;
+            border: 1.5px solid #000000;
+            border-radius: 3px;
+            padding: 6px 8px;
+            text-align: center;
+            font-size: 9px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 150px;
+            box-sizing: border-box;
+            page-break-inside: avoid;
+            line-height: 1.25;
+        }
+
+        .header-title { font-size: 9.5px; font-weight: bold; }
+        .dept-title { font-size: 8.5px; font-weight: bold; }
+        .coupon-title { font-size: 8.5px; font-weight: bold; margin-bottom: 2px; }
+
+        .info-block {
+            text-align: left;
+            font-size: 8px;
+            margin: 3px 0;
+            line-height: 1.3;
+        }
+
+        .validity-note { font-size: 7.5px; font-weight: bold; margin: 2px 0; }
+        .month-note { font-size: 7.5px; font-weight: bold; margin-bottom: 2px; }
+        .price-tag { font-size: 9px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px; margin-top: 2px; }
+
         @media print {
-            .no-print { display: none; }
-            body { background: white; padding: 0; }
-            .qr-card { border: 1px solid #000; box-shadow: none; }
+            @page {
+                size: A4 landscape;
+                margin: 5mm;
+            }
+            body { background: none; padding: 0; }
+            .no-print { display: none !important; }
+            .print-grid {
+                grid-template-columns: repeat(6, 1fr);
+                gap: 4px;
+            }
+            .coupon-card {
+                box-shadow: none;
+                border: 1.5px solid #000;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="no-print">
-        <button class="btn" onclick="window.print()">🖨️ Print {% if single %}Single Card{% else %}All Cards (Bulk){% endif %}</button>
-        <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background: #64748b; margin-left: 10px;">Back to Dashboard</a>
-        <a href="{{ url_for('employees') }}" class="btn" style="background: #0d9488; margin-left: 10px;">View Employees List</a>
+
+    <div class="control-panel no-print">
+        <div class="control-group">
+            <label for="startSeqInput">🔢 Starting Number (ተ.ቁ):</label>
+            <input type="number" id="startSeqInput" value="1" min="1" oninput="generateCards()" style="width: 120px;">
+        </div>
+
+        <div class="control-group">
+            <label for="copiesSelect">📄 Coupons Per Employee:</label>
+            <select id="copiesSelect" onchange="generateCards()">
+                <option value="1">1 per Employee</option>
+                <option value="2">2 per Employee</option>
+                <option value="4">4 per Employee</option>
+                <option value="10">10 per Employee</option>
+                <option value="22" selected>22 per Employee (Full Page)</option>
+            </select>
+        </div>
+
+        <div>
+            <button onclick="window.print()" class="btn btn-blue">🖨️ Print Landscape Pages</button>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-dark" style="margin-left: 8px;">Back</a>
+        </div>
     </div>
 
-    <div class="card-container">
-        {% for emp in employees %}
-        <div class="qr-card">
-            <h3>{{ emp.full_name }}</h3>
-            <p><strong>ID:</strong> {{ emp.employee_id }}</p>
-            <p><strong>Sector:</strong> {{ emp.sector }}</p>
-            <!-- Visual QR Code Generator API -->
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ emp.qr_token }}" alt="QR Code">
-            <p style="font-size: 11px; word-break: break-all; color: #94a3b8;">Token: {{ emp.qr_token }}</p>
-        </div>
-        {% endfor %}
-    </div>
+    <div id="printGrid" class="print-grid"></div>
+
+    <script>
+        const rawEmployees = [
+            {% for emp in employees %}
+            {
+                id: "{{ emp.id }}",
+                employee_id: "{{ emp.employee_id }}",
+                full_name: "{{ emp.full_name }}",
+                sector: "{{ emp.sector }}"
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        function generateCards() {
+            const grid = document.getElementById('printGrid');
+            grid.innerHTML = '';
+            
+            let currentSeq = parseInt(document.getElementById('startSeqInput').value) || 1;
+            const copiesCount = parseInt(document.getElementById('copiesSelect').value) || 1;
+
+            rawEmployees.forEach(emp => {
+                for (let i = 0; i < copiesCount; i++) {
+                    const cardDiv = document.createElement('div');
+                    cardDiv.className = 'coupon-card';
+
+                    cardDiv.innerHTML = `
+                        <div>
+                            <div class="header-title">በኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር</div>
+                            <div class="dept-title">ዲዛይንና ግንባታ ፅ/ቤት</div>
+                            <div class="coupon-title">የሰራተኞች የሀብ መስተንግዶ ኩፖን</div>
+                        </div>
+
+                        <div class="info-block">
+                            <div><strong>የሰራተኛው ስም:</strong> ${emp.full_name}</div>
+                            <div><strong>ተ.ቁ:</strong> ${currentSeq}</div>
+                            <div><strong>የሚሰሩበት ተቋም:</strong> ${emp.sector || 'የከተማ ውበትና አረንጓዴ ልማት ጽ/ቤት'}</div>
+                        </div>
+
+                        <div>
+                            <div class="validity-note">ለአንድ ጊዜ አገልግሎት ብቻ የሚውል</div>
+                            <div class="month-note">ለአገልግሎቱ በወጣው የጥቅምት ወር 2019 ዓ.ም ብቻ የሚያገለግል</div>
+                            <div class="price-tag">የኩፖኑ ዋጋ 40 ብር</div>
+                        </div>
+                    `;
+
+                    grid.appendChild(cardDiv);
+                    currentSeq++;
+                }
+            });
+        }
+
+        window.onload = function() {
+            generateCards();
+        };
+    </script>
 </body>
 </html>
