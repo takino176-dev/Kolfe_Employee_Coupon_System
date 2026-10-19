@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>የሰራተኞች QR ኮድ ማተሚያ</title>
-    <script src="[https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js](https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js)"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; padding: 20px; color: #1e293b; }
@@ -81,7 +81,7 @@
     <div class="control-panel no-print">
         <div>
             <h2>📱 የሰራተኞች QR ኮድ ማተሚያ ገፅ</h2>
-            <p style="font-size:12px; color:#64748b;">የሰራተኛው ሙሉ ስም፣ መታወቂያ እና ዘርፍ በ QR ኮድ ውስጥ የተካተተበት</p>
+            <p style="font-size:12px; color:#64748b;">የሰራተኞች ስም፣ መታወቂያ እና ዘርፍ ብቻ የያዘ የ QR ኮድ ማተሚያ</p>
         </div>
         <div>
             <button onclick="window.print()" class="btn btn-blue">🖨️ QR ኮዶችን አትም</button>
@@ -92,16 +92,14 @@
     <div class="qr-grid">
         {% for emp in employees %}
         <div class="qr-card">
+            <!-- ስም፣ መታወቂያ እና ዘርፍ ብቻ -->
             <div class="emp-name">{{ emp.full_name }}</div>
             <div class="emp-detail"><strong>መታወቂያ:</strong> {{ emp.employee_id }}</div>
             <div class="emp-detail"><strong>ዘርፍ:</strong> {{ emp.sector }}</div>
 
+            <!-- በስካነር የሚቃኘው QR ኮድ -->
             <div class="qr-box">
                 <div id="standalone-qr-{{ emp.id }}"></div>
-            </div>
-
-            <div style="font-size:9px; font-family:monospace; color:#555;">
-                Token: {{ emp.qr_token }}
             </div>
         </div>
         {% endfor %}
@@ -112,9 +110,6 @@
             {% for emp in employees %}
             {
                 id: "{{ emp.id }}",
-                employee_id: "{{ emp.employee_id }}",
-                full_name: "{{ emp.full_name }}",
-                sector: "{{ emp.sector }}",
                 qr_token: "{{ emp.qr_token }}"
             }{% if not loop.last %},{% endif %}
             {% endfor %}
@@ -122,12 +117,10 @@
 
         window.onload = function() {
             employeesList.forEach(emp => {
-                const qrText = `ስም: ${emp.full_name}\nመታወቂያ: ${emp.employee_id}\nዘርፍ: ${emp.sector}\nቶከን: ${emp.qr_token}`;
-                
                 new QRCode(document.getElementById(`standalone-qr-${emp.id}`), {
-                    text: qrText,
-                    width: 100,
-                    height: 100
+                    text: emp.qr_token,
+                    width: 110,
+                    height: 110
                 });
             });
         };
