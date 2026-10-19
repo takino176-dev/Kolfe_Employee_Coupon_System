@@ -106,6 +106,11 @@ def logout():
 
 # --- ADMIN DASHBOARD & MANAGEMENT ---
 
+@app.route('/admin')
+@admin_required
+def admin_root():
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/admin/dashboard')
 @admin_required
 def admin_dashboard():
