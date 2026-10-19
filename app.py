@@ -119,6 +119,14 @@ def admin_dashboard():
     total_redemptions = RedemptionLog.query.count()
     return render_template('admin.html', total_employees=total_employees, total_merchants=total_merchants, total_redemptions=total_redemptions)
 
+@app.route('/setup', methods=['GET', 'POST'])
+@admin_required
+def setup():
+    if request.method == 'POST':
+        flash('Setup settings updated successfully.', 'success')
+        return redirect(url_for('admin_dashboard'))
+    return render_template('setup.html')
+
 @app.route('/employees')
 @admin_required
 def employees():
