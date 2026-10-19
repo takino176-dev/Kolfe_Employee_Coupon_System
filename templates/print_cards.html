@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>የኩፖን ማተሚያ ገፅ</title>
+    <!-- የ QR ኮድ ማመንጫ ላይብረሪ -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; padding: 15px; color: #000000; }
@@ -44,14 +46,13 @@
         .btn-blue { background: #2563eb; }
         .btn-dark { background: #475569; }
 
-        /* Each Employee gets their own strictly separated page container */
+        /* እያንዳንዱ ሰራተኛ የራሱ የተለየ ማተሚያ ገጽ ይኖረዋል */
         .employee-page {
             width: 100%;
             margin-bottom: 30px;
             page-break-inside: avoid;
         }
 
-        /* Force each new employee onto a brand new page when printing */
         @media print {
             .employee-page {
                 page-break-before: always !important;
@@ -78,32 +79,39 @@
             background: #ffffff;
             border: 1.5px solid #000000;
             border-radius: 3px;
-            padding: 6px 8px;
+            padding: 5px 6px;
             text-align: center;
             font-size: 9px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            height: 150px;
+            height: 155px;
             box-sizing: border-box;
             page-break-inside: avoid;
-            line-height: 1.25;
+            line-height: 1.2;
         }
 
-        .header-title { font-size: 9.5px; font-weight: bold; }
-        .dept-title { font-size: 8.5px; font-weight: bold; }
-        .coupon-title { font-size: 8.5px; font-weight: bold; margin-bottom: 2px; }
+        .header-title { font-size: 9px; font-weight: bold; }
+        .dept-title { font-size: 8px; font-weight: bold; }
+        .coupon-title { font-size: 8px; font-weight: bold; margin-bottom: 1px; }
 
         .info-block {
             text-align: left;
-            font-size: 8px;
-            margin: 3px 0;
-            line-height: 1.3;
+            font-size: 7.5px;
+            margin: 2px 0;
+            line-height: 1.2;
         }
 
-        .validity-note { font-size: 7.5px; font-weight: bold; margin: 2px 0; }
-        .month-note { font-size: 7.5px; font-weight: bold; margin-bottom: 2px; }
-        .price-tag { font-size: 9px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px; margin-top: 2px; }
+        .qr-box {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 2px 0;
+        }
+
+        .validity-note { font-size: 7px; font-weight: bold; margin: 1px 0; }
+        .month-note { font-size: 7px; font-weight: bold; margin-bottom: 1px; }
+        .price-tag { font-size: 8.5px; font-weight: bold; border-top: 1px solid #000; padding-top: 2px; margin-top: 1px; }
 
         /* የህትመት ቅንብር */
         @media print {
@@ -144,17 +152,17 @@
         </div>
     </div>
 
-    <!-- Container where all pages will render -->
+    <!-- ማተሚያ ቦታ -->
     <div id="printContainer"></div>
 
     <script>
-        // Data from backend
         const rawEmployees = [
             {% for emp in employees %}
             {
                 id: "{{ emp.id }}",
                 full_name: "{{ emp.full_name }}",
-                sector: "{{ emp.sector }}"
+                sector: "{{ emp.sector }}",
+                qr_token: "{{ emp.qr_token }}"
             }{% if not loop.last %},{% endif %}
             {% endfor %}
         ];
@@ -169,8 +177,9 @@
 
             const selectedMonth = document.getElementById('monthInput').value || 'የጥቅምት ወር 2019 ዓ.ም';
 
+            let globalCardCounter = 0;
+
             rawEmployees.forEach(emp => {
-                // Wrapper page div per employee
                 const pageDiv = document.createElement('div');
                 pageDiv.className = 'employee-page';
 
@@ -178,39 +187,12 @@
                 gridDiv.className = 'print-grid';
 
                 for (let i = 0; i < couponCount; i++) {
+                    globalCardCounter++;
                     const cardDiv = document.createElement('div');
                     cardDiv.className = 'coupon-card';
+                    const qrId = `qrcode-${emp.id}-${globalCardCounter}`;
 
                     cardDiv.innerHTML = `
                         <div>
                             <div class="header-title">በኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር</div>
-                            <div class="dept-title">ዲዛይንና ግንባታ ፑል</div>
-                            <div class="coupon-title">የሰራተኞች የህብ መስተንግዶ ኩፖን</div>
-                        </div>
-
-                        <div class="info-block">
-                            <div><strong>የሰራተኛው ስም:</strong> ${emp.full_name}</div>
-                            <div><strong>የሚሰሩበት ተቋም:</strong> ${emp.sector || 'የከተማ ውበትና አረንጓዴ ልማት ጽ/ቤት'}</div>
-                        </div>
-
-                        <div>
-                            <div class="validity-note">ለአንድ ጊዜ አገልግሎት ብቻ የሚውል</div>
-                            <div class="month-note">ለአገልግሎቱ በወጣው ${selectedMonth} ብቻ የሚያገለግል</div>
-                            <div class="price-tag">የኩፖኑ ዋጋ 40 ብር</div>
-                        </div>
-                    `;
-
-                    gridDiv.appendChild(cardDiv);
-                }
-
-                pageDiv.appendChild(gridDiv);
-                container.appendChild(pageDiv);
-            });
-        }
-
-        window.onload = function() {
-            generateCards();
-        };
-    </script>
-</body>
-</html>
+                            <div class="dept-title">ዲዛይንና ግንባታ ፑል
