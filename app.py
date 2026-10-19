@@ -124,7 +124,7 @@ def logout():
     flash('Logged out successfully.', 'info')
     return redirect(url_for('login'))
 
-# ================= ADMIN MANAGEMENT =================
+# ================= ADMIN DASHBOARD =================
 
 @app.route('/dashboard')
 @app.route('/admin')
@@ -217,7 +217,7 @@ def admin_dashboard():
 
             <div class="actions-bar">
                 <a href="{{ url_for('add_employee') }}" class="btn btn-blue">+ Add Employee</a>
-                <a href="{{ url_for('employees') }}" class="btn btn-dark">Manage Employees</a>
+                <a href="{{ url_for('employees') }}" class="btn btn-dark">Manage & Bulk Delete Employees</a>
                 <a href="{{ url_for('merchants') }}" class="btn btn-green">Manage Merchants</a>
                 <a href="{{ url_for('upload_employees') }}" class="btn btn-dark">Bulk Excel Upload</a>
                 <a href="{{ url_for('allocations') }}" class="btn" style="background:#b45309;">Release Allocations</a>
@@ -242,7 +242,7 @@ def admin_dashboard():
                             </tr>
                             {% endfor %}
                         {% else %}
-                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No merchant collection records found for this 30-day cycle.</td></tr>
+                        <tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No merchant collection records found for this month.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -291,11 +291,109 @@ def admin_change_password():
             return redirect(url_for('admin_dashboard'))
     return render_template('admin_password.html')
 
+# ================= EMPLOYEE MANAGEMENT & BULK ACTIONS =================
+
 @app.route('/employees')
 def employees():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
     all_emps = Employee.query.all()
-    return render_template('employees.html', employees=all_emps, rows=all_emps)
+    sectors = sorted(list(set(e.sector for e in all_emps if e.sector)))
+    
+    EMPLOYEES_HTML = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Manage Employees</title>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background: #f1f5f9; color: #334155; }
+            .card { background: #fff; padding: 24px; border-radius: 12px; max-width: 1000px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; }
+            th { background: #f8fafc; padding: 12px; font-size: 13px; border-bottom: 2px solid #e2e8f0; }
+            td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
+            .btn { text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #fff; border: none; cursor: pointer; display: inline-block; }
+            .btn-blue { background: #2563eb; }
+            .btn-red { background: #dc2626; }
+            .btn-amber { background: #d97706; }
+            .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; background: #dcfce7; color: #15803d; font-weight: bold; }
+            .bulk-bar { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 20px; display: flex; gap: 15px; align-items: center; justify-content: space-between; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h2>👥 Employee Management</h2>
+            <div style="margin-top: 15px; display:flex; gap:10px;">
+                <a href="{{ url_for('add_employee') }}" class="btn btn-blue">+ Add Employee</a>
+                <a href="{{ url_for('upload_employees') }}" class="btn" style="background:#475569;">Bulk Excel Upload</a>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background:#64748b;">← Back to Dashboard</a>
+            </div>
+            <hr style="margin: 20px 0; border:0; border-top:1px solid #e2e8f0;">
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('bulk_delete_employees') }}" method="POST" id="employeeForm">
+                <div class="bulk-bar">
+                    <div>
+                        <strong>Bulk Actions:</strong>
+                        <span style="font-size:13px; color:#64748b; margin-left:10px;">Select employees below OR pick a whole sector to delete:</span>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <select name="sector_to_delete" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
+                            <option value="">-- Select Sector to Delete --</option>
+                            {% for sec in sectors %}
+                            <option value="{{ sec }}">{{ sec }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-red" onclick="return confirm('Are you sure you want to delete selected employees or entire sector?');">🗑️ Delete Selected / Sector</button>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
+                            <th>Employee ID</th>
+                            <th>Full Name</th>
+                            <th>Sector</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp in employees %}
+                        <tr>
+                            <td><input type="checkbox" name="selected_ids" value="{{ emp.id }}" class="emp-checkbox"></td>
+                            <td style="font-weight:600;">{{ emp.employee_id }}</td>
+                            <td>{{ emp.full_name }}</td>
+                            <td><span style="background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:4px; font-weight:600; font-size:12px;">{{ emp.sector }}</span></td>
+                            <td>
+                                <a href="{{ url_for('print_single_card', emp_id=emp.id) }}" class="btn btn-blue" style="padding:4px 8px; font-size:12px;">QR Card</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">No employees found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </form>
+        </div>
+        <script>
+            function toggleSelectAll(master) {
+                let checkboxes = document.getElementsByClassName('emp-checkbox');
+                for (let i = 0; i < checkboxes.length; i++) {
+                    checkboxes[i].checked = master.checked;
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return render_template_string(EMPLOYEES_HTML, employees=all_emps, sectors=sectors)
 
 @app.route('/add_employee', methods=['GET', 'POST'])
 def add_employee():
@@ -324,31 +422,255 @@ def add_employee():
         return redirect(url_for('employees'))
     return render_template('employee_form.html')
 
-@app.route('/delete_employee/<int:emp_id>', methods=['POST'])
-def delete_employee(emp_id):
+@app.route('/bulk_delete_employees', methods=['POST'])
+def bulk_delete_employees():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
-    emp = Employee.query.get_or_404(emp_id)
-    if emp.user_id:
-        u = User.query.get(emp.user_id)
-        if u: db.session.delete(u)
-    CouponAllocation.query.filter_by(employee_id=emp.id).delete()
-    db.session.delete(emp)
+    
+    sector_to_delete = request.form.get('sector_to_delete', '').strip()
+    selected_ids = request.form.getlist('selected_ids')
+    
+    deleted_count = 0
+    if sector_to_delete:
+        emps = Employee.query.filter_by(sector=sector_to_delete).all()
+        for emp in emps:
+            if emp.user_id:
+                u = User.query.get(emp.user_id)
+                if u: db.session.delete(u)
+            CouponAllocation.query.filter_by(employee_id=emp.id).delete()
+            db.session.delete(emp)
+            deleted_count += 1
+        flash(f'Successfully deleted all {deleted_count} employees in sector: "{sector_to_delete}"', 'success')
+    elif selected_ids:
+        for emp_id in selected_ids:
+            emp = Employee.query.get(int(emp_id))
+            if emp:
+                if emp.user_id:
+                    u = User.query.get(emp.user_id)
+                    if u: db.session.delete(u)
+                CouponAllocation.query.filter_by(employee_id=emp.id).delete()
+                db.session.delete(emp)
+                deleted_count += 1
+        flash(f'Successfully deleted {deleted_count} selected employees.', 'success')
+    else:
+        flash('No employees or sector selected for deletion.', 'warning')
+        
     db.session.commit()
-    flash('Employee removed successfully.', 'success')
     return redirect(url_for('employees'))
 
-@app.route('/reset_password/<int:employee_id>', methods=['POST'])
-def reset_password(employee_id):
+# ================= ALLOCATION MANAGEMENT & BULK SECTOR ACTIONS =================
+
+@app.route('/allocations', methods=['GET', 'POST'])
+def allocations():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
-    emp = Employee.query.get_or_404(employee_id)
-    if emp.user_id:
-        u = User.query.get(emp.user_id)
-        if u:
-            u.password = None
-            u.is_first_login = True
-            db.session.commit()
-            flash('Employee password reset! They can log in password-free to set a new password.', 'success')
-    return redirect(url_for('employees'))
+    month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
+    all_emps = Employee.query.all()
+    sectors = sorted(list(set(e.sector for e in all_emps if e.sector)))
+    
+    if request.method == 'POST':
+        target = request.form.get('target', 'all')
+        amount = float(request.form.get('amount', 0))
+        
+        if target == 'all':
+            for emp in all_emps:
+                alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
+                if alloc: alloc.amount = amount
+                else: db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
+            flash(f'Released {amount} ETB allocation to ALL employees for {month}!', 'success')
+            
+        elif target == 'sector':
+            target_sector = request.form.get('sector_name', '').strip()
+            sector_emps = Employee.query.filter_by(sector=target_sector).all()
+            for emp in sector_emps:
+                alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
+                if alloc: alloc.amount = amount
+                else: db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
+            flash(f'Released {amount} ETB allocation to all employees in Sector "{target_sector}" for {month}!', 'success')
+            
+        elif target == 'single':
+            emp_id = request.form.get('employee_id')
+            alloc = CouponAllocation.query.filter_by(employee_id=emp_id, month=month).first()
+            if alloc: alloc.amount = amount
+            else: db.session.add(CouponAllocation(employee_id=emp_id, month=month, amount=amount))
+            flash(f'Released allocation for single employee for {month}!', 'success')
+            
+        db.session.commit()
+        return redirect(url_for('allocations', month=month))
+        
+    ALLOCATIONS_HTML = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Release & Manage Allocations</title>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background: #f1f5f9; color: #334155; }
+            .card { background: #fff; padding: 24px; border-radius: 12px; max-width: 900px; margin: 0 auto 20px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+            .btn { text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #fff; border: none; cursor: pointer; display: inline-block; }
+            .btn-blue { background: #2563eb; }
+            .btn-red { background: #dc2626; }
+            .btn-amber { background: #d97706; }
+            .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; background: #dcfce7; color: #15803d; font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            th { background: #f8fafc; padding: 12px; font-size: 13px; border-bottom: 2px solid #e2e8f0; text-align: left; }
+            td { padding: 12px; border-bottom: 1px solid #f1f5f9; }
+            input, select { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; margin-top: 5px; width: 100%; }
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h2>💰 Release Coupon Allocations (Cycle: {{ month }})</h2>
+            <div style="margin-top: 15px;">
+                <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background:#64748b;">← Back to Dashboard</a>
+            </div>
+            <hr style="margin: 20px 0; border:0; border-top:1px solid #e2e8f0;">
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST">
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items:end;">
+                    <div>
+                        <label><strong>Target Group:</strong></label>
+                        <select name="target" id="targetSelect" onchange="toggleTargetFields()">
+                            <option value="all">All Employees System-Wide</option>
+                            <option value="sector">Bulk by Sector</option>
+                            <option value="single">Single Employee</option>
+                        </select>
+                    </div>
+
+                    <div id="sectorBox" style="display:none;">
+                        <label><strong>Select Sector:</strong></label>
+                        <select name="sector_name">
+                            {% for sec in sectors %}
+                            <option value="{{ sec }}">{{ sec }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div id="employeeBox" style="display:none;">
+                        <label><strong>Select Employee:</strong></label>
+                        <select name="employee_id">
+                            {% for emp in employees %}
+                            <option value="{{ emp.id }}">{{ emp.full_name }} ({{ emp.employee_id }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label><strong>Allocation Amount (ETB):</strong></label>
+                        <input type="number" step="0.01" name="amount" required placeholder="e.g. 1000">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-blue" style="margin-top:20px; width:100%; padding:12px;">🚀 Release Allocation Now</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>🔴 Remove Allocations (Single, Bulk, or Sector Reset)</h3>
+            <p style="font-size:13px; color:#64748b; margin-top:5px;">Reset employee active coupon balances back to 0.00 ETB for cycle {{ month }}.</p>
+            
+            <form action="{{ url_for('remove_allocations') }}?month={{ month }}" method="POST" style="margin-top:15px;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                    <div>
+                        <label><strong>Remove/Reset Entire Sector:</strong></label>
+                        <select name="sector_to_remove">
+                            <option value="">-- Choose Sector to Reset --</option>
+                            {% for sec in sectors %}
+                            <option value="{{ sec }}">{{ sec }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div style="display:flex; align-items:flex-end;">
+                        <button type="submit" class="btn btn-red" style="width:100%; padding:10px;" onclick="return confirm('Reset selected allocation amounts to zero?');">🗑️ Remove / Reset Allocation</button>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selectAllAlloc" onclick="toggleAllocCheckboxes(this)"></th>
+                            <th>Employee ID</th>
+                            <th>Full Name</th>
+                            <th>Sector</th>
+                            <th>Current Allocation ({{ month }})</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp in employees %}
+                        <tr>
+                            <td><input type="checkbox" name="selected_emp_ids" value="{{ emp.id }}" class="alloc-checkbox"></td>
+                            <td>{{ emp.employee_id }}</td>
+                            <td>{{ emp.full_name }}</td>
+                            <td>{{ emp.sector }}</td>
+                            <td style="font-weight:700; color:#16a34a;">
+                                {% set alloc = emp.id|get_alloc(month) %}
+                                {{ "%.2f"|format(alloc) }} ETB
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </form>
+        </div>
+
+        <script>
+            function toggleTargetFields() {
+                var target = document.getElementById("targetSelect").value;
+                document.getElementById("sectorBox").style.display = (target === "sector") ? "block" : "none";
+                document.getElementById("employeeBox").style.display = (target === "single") ? "block" : "none";
+            }
+            function toggleAllocCheckboxes(master) {
+                let checkboxes = document.getElementsByClassName('alloc-checkbox');
+                for (let i = 0; i < checkboxes.length; i++) {
+                    checkboxes[i].checked = master.checked;
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return render_template_string(ALLOCATIONS_HTML, employees=all_emps, sectors=sectors, month=month)
+
+@app.template_filter('get_alloc')
+def get_alloc_filter(emp_id, month):
+    alloc = CouponAllocation.query.filter_by(employee_id=emp_id, month=month).first()
+    return alloc.amount if alloc else 0.0
+
+@app.route('/remove_allocations', methods=['POST'])
+def remove_allocations():
+    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
+    month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
+    
+    sector_to_remove = request.form.get('sector_to_remove', '').strip()
+    selected_emp_ids = request.form.getlist('selected_emp_ids')
+    
+    count = 0
+    if sector_to_remove:
+        emps = Employee.query.filter_by(sector=sector_to_remove).all()
+        for emp in emps:
+            alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
+            if alloc:
+                alloc.amount = 0.0
+                count += 1
+        flash(f'Reset allocations to 0.00 ETB for all {count} employees in sector "{sector_to_remove}".', 'success')
+    elif selected_emp_ids:
+        for emp_id in selected_emp_ids:
+            alloc = CouponAllocation.query.filter_by(employee_id=int(emp_id), month=month).first()
+            if alloc:
+                alloc.amount = 0.0
+                count += 1
+        flash(f'Reset allocations to 0.00 ETB for {count} selected employees.', 'success')
+    else:
+        flash('No sector or employees selected for allocation removal.', 'warning')
+
+    db.session.commit()
+    return redirect(url_for('allocations', month=month))
 
 # ================= MERCHANT MANAGEMENT =================
 
@@ -505,29 +827,6 @@ def upload_employees():
         return redirect(url_for('employees'))
     return render_template('upload.html')
 
-@app.route('/allocations', methods=['GET', 'POST'])
-def allocations():
-    if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
-    month = request.args.get('month', datetime.utcnow().strftime('%Y-%m'))
-    all_emps = Employee.query.all()
-    if request.method == 'POST':
-        target = request.form.get('target', 'all')
-        amount = float(request.form.get('amount', 0))
-        if target == 'all':
-            for emp in all_emps:
-                alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first()
-                if alloc: alloc.amount = amount
-                else: db.session.add(CouponAllocation(employee_id=emp.id, month=month, amount=amount))
-            flash(f'Allocation released successfully to all employees for cycle {month}!', 'success')
-        else:
-            emp_id = request.form.get('employee_id')
-            alloc = CouponAllocation.query.filter_by(employee_id=emp_id, month=month).first()
-            if alloc: alloc.amount = amount
-            else: db.session.add(CouponAllocation(employee_id=emp_id, month=month, amount=amount))
-            flash(f'Allocation released successfully for single employee for cycle {month}!', 'success')
-        db.session.commit()
-    return render_template('allocations.html', employees=all_emps, month=month)
-
 @app.route('/print_cards')
 def print_cards():
     if session.get('role') not in ['admin', 'superadmin']: return redirect(url_for('login'))
@@ -571,7 +870,7 @@ def reports_csv():
     output.close()
     return send_file(byte_output, mimetype='text/csv', download_name=f'merchant_sector_report_{month}.csv', as_attachment=True)
 
-# ================= EMPLOYEE PORTAL (EMBEDDED) =================
+# ================= EMPLOYEE PORTAL =================
 
 @app.route('/employee/dashboard')
 def employee_dashboard():
@@ -584,7 +883,6 @@ def employee_dashboard():
     emp = Employee.query.filter_by(user_id=user.id).first() or Employee.query.filter_by(employee_id=user.username).first()
     month = datetime.utcnow().strftime('%Y-%m')
     
-    # Strictly 30-day active allocation lookup for the current month cycle
     alloc = CouponAllocation.query.filter_by(employee_id=emp.id, month=month).first() if emp else None
     allocated = alloc.amount if alloc else 0.0
     
@@ -631,7 +929,7 @@ def employee_dashboard():
             {% endwith %}
             <div class="grid">
                 <div class="card" style="border-top: 4px solid #2563eb;">
-                    <h6 style="color:#64748b; font-size:12px; text-transform:uppercase;">Current 30-Day Allocation ({{ month }})</h6>
+                    <h6 style="color:#64748b; font-size:12px; text-transform:uppercase;">Current Allocation ({{ month }})</h6>
                     <h3 style="font-size:24px; font-weight:800; color:#2563eb; margin-top:5px;">{{ "%.2f"|format(allocated) }} ETB</h3>
                 </div>
                 <div class="card" style="border-top: 4px solid #ef4444;">
@@ -644,7 +942,7 @@ def employee_dashboard():
                 </div>
             </div>
             <div class="card" style="margin-bottom: 25px;">
-                <h4 style="margin-bottom:10px;">Your Digital Coupon QR Card (Active for Cycle: {{ month }})</h4>
+                <h4 style="margin-bottom:10px;">Your Digital Coupon QR Card (Active Cycle: {{ month }})</h4>
                 <div class="qr-box">
                     <div id="qrcode"></div>
                     <p style="margin-top:10px; font-family:monospace; font-weight:700; color:#475569;">Token: {{ emp.qr_token if emp else 'N/A' }}</p>
@@ -725,7 +1023,7 @@ def merchant_scan():
     allocated = alloc.amount if alloc else 0.0
     spent = sum(t.amount for t in Transaction.query.filter_by(employee_id=emp.id, month=month).all())
     if amount > (allocated - spent):
-        flash('Insufficient employee balance for this 30-day monthly cycle!', 'danger')
+        flash('Insufficient employee balance for this monthly cycle!', 'danger')
         return redirect(url_for('merchant_dashboard'))
     db.session.add(Transaction(reference=secrets.token_hex(6).upper(), employee_id=emp.id, merchant_id=session.get('user_id'), amount=amount, month=month))
     db.session.commit()
