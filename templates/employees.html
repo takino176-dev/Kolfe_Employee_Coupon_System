@@ -2,89 +2,92 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Employee Management</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/css/bootstrap.min.css">
+    <title>Manage Employees - Kolfe Coupon System</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f1f5f9; color: #334155; padding: 30px; }
+        .card { background: #fff; padding: 24px; border-radius: 12px; max-width: 1000px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; }
+        th { background: #f8fafc; padding: 12px; font-size: 13px; border-bottom: 2px solid #e2e8f0; color: #475569; }
+        td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+        .btn { text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #fff; border: none; cursor: pointer; display: inline-block; }
+        .btn-blue { background: #2563eb; }
+        .btn-red { background: #dc2626; }
+        .btn-dark { background: #475569; }
+        .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; background: #dcfce7; color: #15803d; font-weight: bold; }
+        .bulk-bar { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 20px; display: flex; gap: 15px; align-items: center; justify-content: space-between; }
+    </style>
 </head>
-<body class="bg-light p-4">
-    <div class="container bg-white p-4 rounded shadow-sm">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="fw-bold">Employee Management</h2>
-            <div>
-                <a href="{{ url_for('add_employee') }}" class="btn btn-primary">+ Add Employee</a>
-                <a href="{{ url_for('upload_employees') }}" class="btn btn-info text-white">Bulk Upload</a>
-                <a href="{{ url_for('print_cards') }}" class="btn btn-secondary">Print All QR Cards</a>
-                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-dark">Dashboard</a>
-            </div>
+<body>
+    <div class="card">
+        <h2>👥 Employee Management</h2>
+        <div style="margin-top: 15px; display:flex; gap:10px;">
+            <a href="{{ url_for('add_employee') }}" class="btn btn-blue">+ Add Employee</a>
+            <a href="{{ url_for('upload_employees') }}" class="btn btn-dark">Bulk Excel Upload</a>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background:#64748b;">← Back to Dashboard</a>
         </div>
+        <hr style="margin: 20px 0; border:0; border-top:1px solid #e2e8f0;">
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
+                    <div class="alert">{{ message }}</div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
 
-        <table class="table table-striped align-middle">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Full Name</th>
-                    <th>Sector</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for emp in employees %}
-                <tr>
-                    <td><code>{{ emp.employee_id }}</code></td>
-                    <td class="fw-bold">{{ emp.full_name }}</td>
-                    <td>{{ emp.sector }}</td>
-                    <td class="text-end">
-                        <a href="{{ url_for('print_single_card', emp_id=emp.id) }}" class="btn btn-sm btn-outline-primary" target="_blank">🖨️ QR Card</a>
-                        
-                        <!-- Reset Password Trigger -->
-                        <button type="button" class="btn btn-sm btn-outline-warning ms-1" data-bs-toggle="modal" data-bs-target="#resetModal{{ emp.id }}">🔑 Password</button>
+        <form action="{{ url_for('bulk_delete_employees') }}" method="POST" id="employeeForm">
+            <div class="bulk-bar">
+                <div>
+                    <strong>Bulk Actions:</strong>
+                    <span style="font-size:13px; color:#64748b; margin-left:10px;">Select employees below OR pick a whole sector to delete:</span>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <select name="sector_to_delete" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
+                        <option value="">-- Select Sector to Delete --</option>
+                        {% for sec in sectors %}
+                        <option value="{{ sec }}">{{ sec }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-red" onclick="return confirm('Are you sure you want to delete selected employees or entire sector?');">🗑️ Delete Selected / Sector</button>
+                </div>
+            </div>
 
-                        <!-- Delete Employee Form -->
-                        <form action="{{ url_for('delete_employee', emp_id=emp.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this employee permanently?');">
-                            <button type="submit" class="btn btn-sm btn-outline-danger ms-1">🗑️ Delete</button>
-                        </form>
-
-                        <!-- Modal -->
-                        <div class="modal fade text-start" id="resetModal{{ emp.id }}" tabindex="-1">
-                            <div class="modal-dialog">
-                                <div class="modal-content">
-                                    <form action="{{ url_for('reset_password', employee_id=emp.id) }}" method="POST">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Reset Password for {{ emp.full_name }}</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <label class="form-label">New Password</label>
-                                            <input type="password" name="new_password" class="form-control" required placeholder="Enter new password">
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <button type="submit" class="btn btn-warning">Reset Password</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="4" class="text-center text-muted py-3">No employees registered yet.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            <table>
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
+                        <th>Employee ID</th>
+                        <th>Full Name</th>
+                        <th>Sector</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for emp in employees %}
+                    <tr>
+                        <td><input type="checkbox" name="selected_ids" value="{{ emp.id }}" class="emp-checkbox"></td>
+                        <td style="font-weight:600;">{{ emp.employee_id }}</td>
+                        <td>{{ emp.full_name }}</td>
+                        <td><span style="background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:4px; font-weight:600; font-size:12px;">{{ emp.sector }}</span></td>
+                        <td>
+                            <a href="{{ url_for('print_single_card', emp_id=emp.id) }}" class="btn btn-blue" style="padding:4px 8px; font-size:12px;">QR Card</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">No employees found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </form>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleSelectAll(master) {
+            let checkboxes = document.getElementsByClassName('emp-checkbox');
+            for (let i = 0; i < checkboxes.length; i++) {
+                checkboxes[i].checked = master.checked;
+            }
+        }
+    </script>
 </body>
 </html>
