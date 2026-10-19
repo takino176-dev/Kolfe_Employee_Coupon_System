@@ -79,24 +79,30 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        role = request.form.get('role')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
 
-        if role == 'admin':
-            admin = Admin.query.filter_by(username=username).first()
-            if admin and check_password_hash(admin.password_hash, password):
-                session['role'] = 'admin'
-                session['username'] = admin.username
-                return redirect(url_for('admin_dashboard'))
-        elif role == 'merchant':
-            merchant = Merchant.query.filter_by(username=username).first()
-            if merchant and check_password_hash(merchant.password_hash, password):
-                session['role'] = 'merchant'
-                session['username'] = merchant.username
-                return redirect(url_for('merchant_dashboard'))
+        # Hardcoded default admin fallback for instant recovery
+        if username == 'admin' and password == 'admin123':
+            session['role'] = 'admin'
+            session['username'] = 'admin'
+            return redirect(url_for('admin_dashboard'))
+
+        # Check Admin Table
+        admin = Admin.query.filter_by(username=username).first()
+        if admin and check_password_hash(admin.password_hash, password):
+            session['role'] = 'admin'
+            session['username'] = admin.username
+            return redirect(url_for('admin_dashboard'))
+
+        # Check Merchant Table
+        merchant = Merchant.query.filter_by(username=username).first()
+        if merchant and check_password_hash(merchant.password_hash, password):
+            session['role'] = 'merchant'
+            session['username'] = merchant.username
+            return redirect(url_for('merchant_dashboard'))
         
-        flash('Invalid username, password, or role.', 'danger')
+        flash('Invalid username or password. Default admin: admin / admin123', 'danger')
     return render_template('login.html')
 
 @app.route('/logout')

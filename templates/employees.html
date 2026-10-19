@@ -2,55 +2,56 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Manage Employees - Kolfe Coupon System</title>
+    <title>Employee Management - Kolfe Coupon System</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #f1f5f9; color: #334155; padding: 30px; }
-        .card { background: #fff; padding: 24px; border-radius: 12px; max-width: 1000px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; }
-        th { background: #f8fafc; padding: 12px; font-size: 13px; border-bottom: 2px solid #e2e8f0; color: #475569; }
-        td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-        .btn { text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #fff; border: none; cursor: pointer; display: inline-block; }
-        .btn-blue { background: #2563eb; }
-        .btn-red { background: #dc2626; }
-        .btn-dark { background: #475569; }
-        .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; background: #dcfce7; color: #15803d; font-weight: bold; }
-        .bulk-bar { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 20px; display: flex; gap: 15px; align-items: center; justify-content: space-between; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .btn { padding: 8px 16px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; }
+        .btn-danger { background: #dc2626; }
+        .btn-secondary { background: #64748b; }
+        .card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+        th { background: #f8fafc; font-weight: 600; color: #475569; }
+        .alert { padding: 10px; border-radius: 6px; margin-bottom: 15px; background: #dcfce7; color: #166534; font-weight: 600; }
+        .controls { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
+        select { padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>👥 Employee Management</h2>
-        <div style="margin-top: 15px; display:flex; gap:10px;">
-            <a href="{{ url_for('add_employee') }}" class="btn btn-blue">+ Add Employee</a>
-            <a href="{{ url_for('upload_employees') }}" class="btn btn-dark">Bulk Excel Upload</a>
-            <a href="{{ url_for('admin_dashboard') }}" class="btn" style="background:#64748b;">← Back to Dashboard</a>
+    <div class="header">
+        <h2>👥 Employee Roster & Management</h2>
+        <div>
+            <a href="{{ url_for('add_employee') }}" class="btn">+ Add Employee</a>
+            <a href="{{ url_for('upload_employees') }}" class="btn" style="background:#059669;">📊 Bulk Upload</a>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">← Back</a>
         </div>
-        <hr style="margin: 20px 0; border:0; border-top:1px solid #e2e8f0;">
+    </div>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-        <form action="{{ url_for('bulk_delete_employees') }}" method="POST" id="employeeForm">
-            <div class="bulk-bar">
-                <div>
-                    <strong>Bulk Actions:</strong>
-                    <span style="font-size:13px; color:#64748b; margin-left:10px;">Select employees below OR pick a whole sector to delete:</span>
-                </div>
-                <div style="display:flex; gap:10px; align-items:center;">
-                    <select name="sector_to_delete" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
-                        <option value="">-- Select Sector to Delete --</option>
-                        {% for sec in sectors %}
-                        <option value="{{ sec }}">{{ sec }}</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="btn btn-red" onclick="return confirm('Are you sure you want to delete selected employees or entire sector?');">🗑️ Delete Selected / Sector</button>
-                </div>
+    <div class="card">
+        <form method="POST" action="{{ url_for('bulk_delete_employees') }}" id="deleteForm">
+            <div class="controls">
+                <button type="submit" class="btn btn-danger" onclick="return confirm('Delete selected employees?')">Delete Selected</button>
+                
+                <span style="color:#cbd5e1;">|</span>
+                
+                <label><strong>Delete Entire Sector:</strong></label>
+                <select name="sector_to_delete">
+                    <option value="">-- Select Sector --</option>
+                    {% for sector in sectors %}
+                        <option value="{{ sector }}">{{ sector }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-danger" onclick="return confirm('WARNING: Delete all employees in this sector?')">Delete Sector</button>
             </div>
 
             <table>
@@ -58,34 +59,37 @@
                     <tr>
                         <th><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
                         <th>Employee ID</th>
-                        <th>Full Name</th>
-                        <th>Sector</th>
-                        <th>Actions</th>
+                        <th>Full Name (ስም)</th>
+                        <th>Sector (ዘርፍ)</th>
+                        <th>Allowance</th>
+                        <th>Balance</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for emp in employees %}
                     <tr>
-                        <td><input type="checkbox" name="selected_ids" value="{{ emp.id }}" class="emp-checkbox"></td>
-                        <td style="font-weight:600;">{{ emp.employee_id }}</td>
+                        <td><input type="checkbox" name="selected_ids" value="{{ emp.id }}"></td>
+                        <td><strong>{{ emp.employee_id }}</strong></td>
                         <td>{{ emp.full_name }}</td>
-                        <td><span style="background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:4px; font-weight:600; font-size:12px;">{{ emp.sector }}</span></td>
+                        <td>{{ emp.sector }}</td>
+                        <td>{{ emp.monthly_allowance }} ETB</td>
+                        <td><span style="color:#059669; font-weight:bold;">{{ emp.balance }} ETB</span></td>
                         <td>
-                            <a href="{{ url_for('print_single_card', emp_id=emp.id) }}" class="btn btn-blue" style="padding:4px 8px; font-size:12px;">QR Card</a>
+                            <a href="{{ url_for('print_single_card', emp_id=emp.id) }}" class="btn btn-secondary" style="font-size:12px; padding:4px 8px;">🖨️ Print Card</a>
                         </td>
                     </tr>
-                    {% else %}
-                    <tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:20px;">No employees found.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </form>
     </div>
+
     <script>
-        function toggleSelectAll(master) {
-            let checkboxes = document.getElementsByClassName('emp-checkbox');
-            for (let i = 0; i < checkboxes.length; i++) {
-                checkboxes[i].checked = master.checked;
+        function toggleSelectAll(source) {
+            checkboxes = document.getElementsByName('selected_ids');
+            for(var i=0, n=checkboxes.length;i<n;i++) {
+                checkboxes[i].checked = source.checked;
             }
         }
     </script>
