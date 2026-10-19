@@ -46,6 +46,13 @@ class RedemptionLog(db.Model):
     amount = db.Column(db.Float, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
+class SystemConfig(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    org_name = db.Column(db.String(150), default="Kolfe Keraniyo Sub-City Administration")
+    department = db.Column(db.String(150), default="ዲዛይንና ግንባታ ፑል (Design & Construction Pool)")
+    default_allowance = db.Column(db.Float, default=1000.0)
+    redemption_deduction = db.Column(db.Float, default=200.0)
+
 # ==================== AUTHENTICATION DECORATORS ====================
 
 def admin_required(f):
@@ -123,15 +130,28 @@ def admin_dashboard():
     total_employees = Employee.query.count()
     total_merchants = Merchant.query.count()
     total_redemptions = RedemptionLog.query.count()
-    return render_template('admin.html', total_employees=total_employees, total_merchants=total_merchants, total_redemptions=total_redemptions)
+    config = SystemConfig.query.first()
+    return render_template('admin.html', total_employees=total_employees, total_merchants=total_merchants, total_redemptions=total_redemptions, config=config)
 
 @app.route('/setup', methods=['GET', 'POST'])
 @admin_required
 def setup():
+    config = SystemConfig.query.first()
+    if not config:
+        config = SystemConfig()
+        db.session.add(config)
+        db.session.commit()
+
     if request.method == 'POST':
-        flash('Setup settings updated successfully.', 'success')
+        config.org_name = request.form.get('org_name', config.org_name)
+        config.department = request.form.get('department', config.department)
+        config.default_allowance = float(request.form.get('default_allowance', 1000.0))
+        config.redemption_deduction = float(request.form.get('redemption_deduction', 200.0))
+        db.session.commit()
+        flash('System setup and configuration updated successfully.', 'success')
         return redirect(url_for('admin_dashboard'))
-    return render_template('setup.html')
+        
+    return render_template('setup.html', config=config)
 
 @app.route('/employees')
 @admin_required
@@ -144,11 +164,14 @@ def employees():
 @app.route('/add_employee', methods=['GET', 'POST'])
 @admin_required
 def add_employee():
+    config = SystemConfig.query.first()
+    default_allowance = config.default_allowance if config else 1000.0
+
     if request.method == 'POST':
         emp_id = request.form.get('employee_id')
         full_name = request.form.get('full_name')
         sector = request.form.get('sector')
-        allowance = float(request.form.get('monthly_allowance', 1000.0))
+        allowance = float(request.form.get('monthly_allowance', default_allowance))
 
         if Employee.query.filter_by(employee_id=emp_id).first():
             flash('Employee ID already exists.', 'danger')
@@ -166,11 +189,14 @@ def add_employee():
         db.session.commit()
         flash('Employee added successfully.', 'success')
         return redirect(url_for('employees'))
-    return render_template('employee_form.html')
+    return render_template('employee_form.html', default_allowance=default_allowance)
 
 @app.route('/upload_employees', methods=['GET', 'POST'])
 @admin_required
 def upload_employees():
+    config = SystemConfig.query.first()
+    default_allowance = config.default_allowance if config else 1000.0
+
     if request.method == 'POST':
         file = request.files.get('file')
         if not file:
@@ -193,7 +219,7 @@ def upload_employees():
                     emp_id = str(row[id_idx])
                     full_name = str(row[name_idx])
                     sector = str(row[sector_idx])
-                    allowance = float(row[allowance_idx]) if allowance_idx is not None and row[allowance_idx] is not None else 1000.0
+                    allowance = float(row[allowance_idx]) if allowance_idx is not None and row[allowance_idx] is not None else default_allowance
 
                     if not Employee.query.filter_by(employee_id=emp_id).first():
                         new_emp = Employee(
@@ -217,8 +243,8 @@ def upload_employees():
                             employee_id=emp_id,
                             full_name=str(row.get('full_name')),
                             sector=str(row.get('sector')),
-                            monthly_allowance=float(row.get('monthly_allowance', 1000.0)),
-                            balance=float(row.get('monthly_allowance', 1000.0)),
+                            monthly_allowance=float(row.get('monthly_allowance', default_allowance)),
+                            balance=float(row.get('monthly_allowance', default_allowance)),
                             qr_token=secrets.token_urlsafe(16)
                         )
                         db.session.add(new_emp)
@@ -251,13 +277,15 @@ def bulk_delete_employees():
 @admin_required
 def print_single_card(emp_id):
     emp = Employee.query.get_or_404(emp_id)
-    return render_template('standalone_qr_print.html', employees=[emp])
+    config = SystemConfig.query.first()
+    return render_template('standalone_qr_print.html', employees=[emp], config=config)
 
 @app.route('/standalone_qr')
 @admin_required
 def standalone_qr():
     all_employees = Employee.query.all()
-    return render_template('standalone_qr_print.html', employees=all_employees)
+    config = SystemConfig.query.first()
+    return render_template('standalone_qr_print.html', employees=all_employees, config=config)
 
 # --- MERCHANT MANAGEMENT ROUTES ---
 
@@ -312,6 +340,9 @@ def delete_merchant(merchant_id):
 @app.route('/merchant/dashboard', methods=['GET', 'POST'])
 @merchant_required
 def merchant_dashboard():
+    config = SystemConfig.query.first()
+    redemption_amount = config.redemption_deduction if config else 200.0
+
     if request.method == 'POST':
         qr_token = request.form.get('qr_token')
         employee = Employee.query.filter_by(qr_token=qr_token).first()
@@ -320,7 +351,6 @@ def merchant_dashboard():
             flash('Invalid QR token or employee not found.', 'danger')
             return redirect(url_for('merchant_dashboard'))
 
-        redemption_amount = 200.0  # Default coupon deduction per scan
         if employee.balance < redemption_amount:
             flash(f'Insufficient balance! Employee balance is {employee.balance} ETB.', 'danger')
             return redirect(url_for('merchant_dashboard'))
@@ -351,5 +381,8 @@ if __name__ == '__main__':
                 password_hash=generate_password_hash('admin123')
             )
             db.session.add(default_admin)
-            db.session.commit()
+        if not SystemConfig.query.first():
+            default_config = SystemConfig()
+            db.session.add(default_config)
+        db.session.commit()
     app.run(debug=True)
