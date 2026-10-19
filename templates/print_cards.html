@@ -7,6 +7,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; padding: 15px; color: #000000; }
 
+        /* Control Panel (Hidden during printing) */
         .control-panel {
             background: #ffffff;
             padding: 18px 24px;
@@ -22,7 +23,7 @@
 
         .control-group { display: flex; flex-direction: column; gap: 4px; }
         .control-group label { font-size: 13px; font-weight: bold; color: #475569; }
-        .control-group input, .control-group select {
+        .control-group input {
             padding: 8px 12px;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
@@ -43,14 +44,16 @@
         .btn-blue { background: #2563eb; }
         .btn-dark { background: #475569; }
 
+        /* Grid Layout: 22 items per page in Landscape */
         .print-grid {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(6, 1fr); /* 6 columns */
             gap: 6px;
             width: 100%;
             margin: 0 auto;
         }
 
+        /* Official Coupon Card matching your paper layout */
         .coupon-card {
             background: #ffffff;
             border: 1.5px solid #000000;
@@ -82,6 +85,7 @@
         .month-note { font-size: 7.5px; font-weight: bold; margin-bottom: 2px; }
         .price-tag { font-size: 9px; font-weight: bold; border-top: 1px solid #000; padding-top: 3px; margin-top: 2px; }
 
+        /* Landscape Print Setup */
         @media print {
             @page {
                 size: A4 landscape;
@@ -102,21 +106,16 @@
 </head>
 <body>
 
+    <!-- Control Panel -->
     <div class="control-panel no-print">
         <div class="control-group">
-            <label for="startSeqInput">🔢 Starting Number (ተ.ቁ):</label>
-            <input type="number" id="startSeqInput" value="1" min="1" oninput="generateCards()" style="width: 120px;">
+            <label for="monthInput">🗓️ Set Month (ለወሩ):</label>
+            <input type="text" id="monthInput" value="ጥቅምት ወር 2019 ዓ.ም" oninput="generateCards()" style="width: 200px;">
         </div>
 
         <div class="control-group">
-            <label for="copiesSelect">📄 Coupons Per Employee:</label>
-            <select id="copiesSelect" onchange="generateCards()">
-                <option value="1">1 per Employee</option>
-                <option value="2">2 per Employee</option>
-                <option value="4">4 per Employee</option>
-                <option value="10">10 per Employee</option>
-                <option value="22" selected>22 per Employee (Full Page)</option>
-            </select>
+            <label for="countInput">📄 Number of Coupons (1 to 22 Max):</label>
+            <input type="number" id="countInput" value="22" min="1" max="22" oninput="generateCards()" style="width: 140px;">
         </div>
 
         <div>
@@ -125,9 +124,11 @@
         </div>
     </div>
 
+    <!-- Printable Grid Container -->
     <div id="printGrid" class="print-grid"></div>
 
     <script>
+        // Employee data passed from Flask bulk upload
         const rawEmployees = [
             {% for emp in employees %}
             {
@@ -141,13 +142,16 @@
 
         function generateCards() {
             const grid = document.getElementById('printGrid');
-            grid.innerHTML = '';
+            grid.innerHTML = ''; // Clear previous cards
             
-            let currentSeq = parseInt(document.getElementById('startSeqInput').value) || 1;
-            const copiesCount = parseInt(document.getElementById('copiesSelect').value) || 1;
+            let couponCount = parseInt(document.getElementById('countInput').value) || 1;
+            if (couponCount > 22) couponCount = 22; // Limit max per page to 22
+            if (couponCount < 1) couponCount = 1;
+
+            const selectedMonth = document.getElementById('monthInput').value || 'ጥቅምት ወር 2019 ዓ.ም';
 
             rawEmployees.forEach(emp => {
-                for (let i = 0; i < copiesCount; i++) {
+                for (let i = 0; i < couponCount; i++) {
                     const cardDiv = document.createElement('div');
                     cardDiv.className = 'coupon-card';
 
@@ -160,23 +164,22 @@
 
                         <div class="info-block">
                             <div><strong>የሰራተኛው ስም:</strong> ${emp.full_name}</div>
-                            <div><strong>ተ.ቁ:</strong> ${currentSeq}</div>
                             <div><strong>የሚሰሩበት ተቋም:</strong> ${emp.sector || 'የከተማ ውበትና አረንጓዴ ልማት ጽ/ቤት'}</div>
                         </div>
 
                         <div>
                             <div class="validity-note">ለአንድ ጊዜ አገልግሎት ብቻ የሚውል</div>
-                            <div class="month-note">ለአገልግሎቱ በወጣው የጥቅምት ወር 2019 ዓ.ም ብቻ የሚያገለግል</div>
+                            <div class="month-note">ለአገልግሎቱ በወጣው የ${selectedMonth} ብቻ የሚያገለግል</div>
                             <div class="price-tag">የኩፖኑ ዋጋ 40 ብር</div>
                         </div>
                     `;
 
                     grid.appendChild(cardDiv);
-                    currentSeq++;
                 }
             });
         }
 
+        // Initialize cards on load
         window.onload = function() {
             generateCards();
         };
