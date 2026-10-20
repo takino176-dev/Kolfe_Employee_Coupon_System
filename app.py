@@ -35,23 +35,21 @@ except Exception:
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.String(50), unique=True, nullable=False)
+    username = db.Column(db.String(100), unique=True, nullable=True)
+    employee_id = db.Column(db.String(50), unique=True, nullable=True)
     full_name = db.Column(db.String(100), nullable=False)
     sector = db.Column(db.String(100), nullable=True)
-    role = db.Column(db.String(20), nullable=False)  # 'admin', 'merchant', 'employee'
+    role = db.Column(db.String(20), nullable=False)  # 'admin', 'merchant', 'employee', 'authority'
     password_hash = db.Column(db.String(200), nullable=False)
-    must_change_password = db.Column(db.Boolean, default=False) # <--- Add this field
-# Inside your Excel/CSV upload processing block:
-hashed_default_pw = generate_password_hash('12345678')
+    must_change_password = db.Column(db.Boolean, default=False)
+    active = db.Column(db.Boolean, default=True, nullable=False)
 
-new_user = User(
-    employee_id=emp_id,
-    full_name=name,
-    sector=sector,
-    role='employee',
-    password_hash=hashed_default_pw,
-    must_change_password=True  # Forces them to change it on first login!
-)
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
 class Allocation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
@@ -85,41 +83,75 @@ class Redemption(db.Model):
     merchant = db.relationship('User', foreign_keys=[merchant_user_id])
     allocation = db.relationship('Allocation')
 
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+def role_required(*roles):
+    def decorator(f):
+        @wraps(f)
+        @login_required
+        def decorated_function(*args, **kwargs):
+            if current_user.role not in roles:
+                abort(403)
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+def ethiopian_info():
+    now = datetime.utcnow() + timedelta(hours=3) # EAT timezone offset roughly
+    if ethiopian:
+        try:
+            ey, em, ed = ethiopian.from_gregorian(now.year, now.month, now.day)
+            months = ['', 'መስከረም', 'ጥቅምት', 'ህዳር', 'ታህሳስ', 'ጥር', 'የካቲት', 'መጋቢት', 'ሚያዚያ', 'ግንቦት', 'ሰኔ', 'ሐምሌ', 'ነሐሴ', 'ጳጉሜ']
+            m_name = months[em] if 1 <= em <= 13 else 'መስከረም'
+            return {'year': ey, 'month': em, 'day': ed, 'month_name': m_name, 'key': f'{ey}-{em:02d}'}
+        except Exception:
+            pass
+    return {'year': now.year, 'month': now.month, 'day': now.day, 'month_name': now.strftime('%B'), 'key': now.strftime('%Y-%m')}
+
+def current_allocation(user):
+    info = ethiopian_info()
+    alloc = Allocation.query.filter_by(user_id=user.id, month_key=info['key']).first()
+    if not alloc:
+        budgets = {b.sector: b.monthly_amount for b in SectorBudget.query.all()}
+        amt = budgets.get(user.sector, 480)
+        expires = (datetime.utcnow() + timedelta(days=35)).date()
+        alloc = Allocation(user_id=user.id, month_key=info['key'], allocated=amt, spent=0, expires_at=expires)
+        db.session.add(alloc)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            alloc = Allocation.query.filter_by(user_id=user.id, month_key=info['key']).first()
+    return alloc
+
+def monthly_rollover():
+    with app.app_context():
+        pass
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        identifier = request.form.get('employee_id', '').strip()
+        identifier = request.form.get('employee_id', '').strip() or request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
         
-        user = User.query.filter((User.employee_id == identifier) | (User.full_name == identifier)).first()
+        user = User.query.filter((User.employee_id == identifier) | (User.username == identifier) | (User.full_name == identifier)).first()
         
-        if user and check_password_hash(user.password_hash, password):
+        if user and user.active and user.check_password(password):
             login_user(user)
-            
-            # Check if they need to change their initial password
             if user.must_change_password:
                 flash('Please change your initial password to continue.', 'warning')
                 return redirect(url_for('change_password'))
-                
-            # Normal routing based on role
             if user.role == 'admin':
                 return redirect(url_for('admin_dashboard'))
-            elif user.role == 'merchant':
+            elif user.role in ('merchant', 'authority'):
                 return redirect(url_for('merchant_dashboard'))
             else:
                 return redirect(url_for('employee_dashboard'))
         else:
-            flash('Invalid ID or Password.', 'danger')
+            flash('Invalid ID/Username or Password.', 'danger')
             
-    return render_template('login.html')
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        u = User.query.filter_by(username=request.form.get('username', '').strip()).first()
-        if u and u.active and u.check_password(request.form.get('password', '')):
-            login_user(u)
-            return redirect(url_for('change_password' if u.must_change_password else 'dashboard'))
-        flash('Invalid username/password or inactive account.')
     return render_template('login.html', title='Login')
 
 @app.route('/logout')
@@ -143,7 +175,7 @@ def change_password():
             flash('Passwords do not match.', 'danger')
             return redirect(url_for('change_password'))
             
-        current_user.password_hash = generate_password_hash(new_password)
+        current_user.set_password(new_password)
         current_user.must_change_password = False
         db.session.commit()
         
@@ -151,12 +183,13 @@ def change_password():
         
         if current_user.role == 'admin':
             return redirect(url_for('admin_dashboard'))
-        elif current_user.role == 'merchant':
+        elif current_user.role in ('merchant', 'authority'):
             return redirect(url_for('merchant_dashboard'))
         else:
             return redirect(url_for('employee_dashboard'))
             
-    return render_template('change_password.html')
+    return render_template('change_password.html', title='Change Password')
+
 @app.route('/')
 @login_required
 def dashboard():
@@ -164,18 +197,35 @@ def dashboard():
         return redirect(url_for('change_password'))
     info = ethiopian_info()
     if current_user.role == 'employee':
-        a = current_allocation(current_user)
-        history = Redemption.query.filter_by(employee_user_id=current_user.id).order_by(Redemption.created_at.desc()).limit(20).all()
-        return render_template('employee_dashboard.html', title='My balance', info=info, a=a, history=history)
-    if current_user.role in ('merchant', 'authority'):
-        total = db.session.query(db.func.coalesce(db.func.sum(Redemption.amount), 0)).filter_by(merchant_user_id=current_user.id).scalar()
-        recent = Redemption.query.filter_by(merchant_user_id=current_user.id).order_by(Redemption.created_at.desc()).limit(20).all()
-        return render_template('operator_dashboard.html', title='Operator dashboard', total=total, recent=recent)
+        return redirect(url_for('employee_dashboard'))
+    elif current_user.role in ('merchant', 'authority'):
+        return redirect(url_for('merchant_dashboard'))
+    else:
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/employee/dashboard')
+@role_required('employee')
+def employee_dashboard():
+    info = ethiopian_info()
+    a = current_allocation(current_user)
+    history = Redemption.query.filter_by(employee_user_id=current_user.id).order_by(Redemption.created_at.desc()).limit(20).all()
+    return render_template('employee_dashboard.html', title='My Balance', info=info, a=a, history=history)
+
+@app.route('/merchant/dashboard')
+@role_required('merchant', 'authority')
+def merchant_dashboard():
+    total = db.session.query(db.func.coalesce(db.func.sum(Redemption.amount), 0)).filter_by(merchant_user_id=current_user.id).scalar()
+    recent = Redemption.query.filter_by(merchant_user_id=current_user.id).order_by(Redemption.created_at.desc()).limit(20).all()
+    return render_template('operator_dashboard.html', title='Operator Dashboard', total=total, recent=recent)
+
+@app.route('/admin/dashboard')
+@role_required('admin')
+def admin_dashboard():
     counts = {r: User.query.filter_by(role=r, active=True).count() for r in ('employee', 'merchant', 'authority', 'admin')}
     info = ethiopian_info()
     spent = db.session.query(db.func.coalesce(db.func.sum(Allocation.spent), 0)).filter_by(month_key=info['key']).scalar()
     alloc = db.session.query(db.func.coalesce(db.func.sum(Allocation.allocated), 0)).filter_by(month_key=info['key']).scalar()
-    return render_template('admin_dashboard.html', title='Admin dashboard', counts=counts, info=info, spent=spent, alloc=alloc)
+    return render_template('admin_dashboard.html', title='Admin Dashboard', counts=counts, info=info, spent=spent, alloc=alloc)
 
 @app.route('/setup', methods=['GET', 'POST'])
 def setup_system():
@@ -280,9 +330,9 @@ def upload_employees():
             flash('እባክዎ ትክክለኛ የ CSV ወይም Excel (.xlsx) ፋይል ይምረጡ', 'danger')
             return redirect(url_for('employees'))
 
-        # Pre-fetch all existing employee IDs into a set to avoid database query timeouts
         existing_ids = {u.employee_id for u in User.query.filter_by(role='employee').all()}
         new_users = []
+        default_hash = generate_password_hash('12345678')
 
         for emp_id, full_name, sector in rows:
             if emp_id not in existing_ids:
@@ -293,11 +343,11 @@ def upload_employees():
                     full_name=full_name,
                     sector=sector,
                     role='employee',
+                    password_hash=default_hash,
                     must_change_password=True
                 )
-                new_user.set_password('123456')
                 new_users.append(new_user)
-                existing_ids.add(emp_id) # Prevent duplicate entries within the same file upload
+                existing_ids.add(emp_id)
                 added_count += 1
 
         if new_users:
@@ -310,6 +360,7 @@ def upload_employees():
         flash(f'ፋይልን በማንበብ ጊዜ ስህተት ተፈጥሯል: {str(e)}', 'danger')
 
     return redirect(url_for('employees'))
+
 @app.route('/admin/allocations', methods=['GET', 'POST'])
 @role_required('admin')
 def allocations():
@@ -322,21 +373,33 @@ def allocations():
         if action == 'single':
             u = User.query.filter_by(employee_id=request.form.get('employee_id', '').strip(), role='employee', active=True).first()
             if not u: flash('Employee not found or inactive.')
-            else: create_allocation(u, amount, info); db.session.commit(); flash(f'Allocated {amount} ETB to {u.full_name} for {info["key"]}.')
+            else: 
+                current_allocation(u) # ensures allocation exists
+                alloc = Allocation.query.filter_by(user_id=u.id, month_key=info['key']).first()
+                if alloc:
+                    alloc.allocated = amount
+                db.session.commit()
+                flash(f'Allocated {amount} ETB to {u.full_name} for {info["key"]}.')
         elif action == 'sector':
             sector = request.form.get('sector', '').strip()
             if sector == 'ALL':
                 users = User.query.filter_by(role='employee', active=True).all()
-                for u in users: create_allocation(u, amount, info)
+                for u in users:
+                    current_allocation(u)
+                    alloc = Allocation.query.filter_by(user_id=u.id, month_key=info['key']).first()
+                    if alloc: alloc.allocated = amount
                 db.session.commit(); flash(f'Allocated {amount} ETB to all {len(users)} employees across all sectors.')
             else:
                 users = User.query.filter_by(role='employee', sector=sector, active=True).all()
-                for u in users: create_allocation(u, amount, info)
+                for u in users:
+                    current_allocation(u)
+                    alloc = Allocation.query.filter_by(user_id=u.id, month_key=info['key']).first()
+                    if alloc: alloc.allocated = amount
                 db.session.commit(); flash(f'Allocated {amount} ETB to {len(users)} employees in sector {sector}.')
         return redirect(url_for('allocations'))
     sectors = [x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()]
     recent = Allocation.query.filter_by(month_key=info['key']).order_by(Allocation.created_at.desc()).limit(100).all()
-    return render_template('allocations.html', title='Monthly allocations', info=info, sectors=sectors, recent=recent)
+    return render_template('allocations.html', title='Monthly Allocations', info=info, sectors=sectors, recent=recent)
 
 @app.route('/admin/budgets', methods=['GET', 'POST'])
 @role_required('admin')
@@ -351,7 +414,7 @@ def budgets():
             if not b: b = SectorBudget(sector=sector); db.session.add(b)
             b.monthly_amount = amount; db.session.commit(); flash('Sector monthly default saved.')
         return redirect(url_for('budgets'))
-    return render_template('budgets.html', title='Sector budgets', budgets=SectorBudget.query.order_by(SectorBudget.sector).all(), sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()])
+    return render_template('budgets.html', title='Sector Budgets', budgets=SectorBudget.query.order_by(SectorBudget.sector).all(), sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()])
 
 @app.route('/admin/print-hub')
 @role_required('admin')
@@ -396,11 +459,19 @@ def print_coupons():
             'coupon_count': coupon_count
         })
 
-    return render_template('print.html', title='Print coupons', print_data=print_data, org=org, coupon_title=title, month=month, value=val_str, usage_note=usage_note, qr_data_uri=qr_data_uri)
+    def qr_data_uri(user):
+        try:
+            qr = qrcode.QRCode(box_size=5, border=1)
+            qr.add_data(f"ID:{user.employee_id}|NAME:{user.full_name}|SECTOR:{user.sector}")
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
+        except Exception:
+            return ""
 
-import qrcode
-import base64
-from io import BytesIO
+    return render_template('print.html', title='Print Coupons', print_data=print_data, org=org, coupon_title=title, month=month, value=val_str, usage_note=usage_note, qr_data_uri=qr_data_uri)
 
 @app.route('/admin/print-ids')
 @role_required('admin')
@@ -421,7 +492,6 @@ def print_ids():
     for user in users:
         qr_uri = ""
         try:
-            # Simple string payload for maximum scanner compatibility
             payload = str(user.employee_id)
             img = qrcode.make(payload)
             buffered = BytesIO()
@@ -441,6 +511,7 @@ def print_ids():
         org=org, 
         title="Employee ID Badges"
     )
+
 @app.route('/redeem', methods=['GET', 'POST'])
 @role_required('merchant', 'authority')
 def redeem():
@@ -461,7 +532,7 @@ def redeem():
                 if not eid:
                     eid = raw.strip() if '\n' not in raw and ':' not in raw else ''
                 if not eid:
-                    flash('QR text must contain an ID field.'); return render_template('redeem.html', title='Redeem coupons', found=None, allocation=None)
+                    flash('QR text must contain an ID field.'); return render_template('redeem.html', title='Redeem Coupons', found=None, allocation=None)
         found = User.query.filter_by(employee_id=eid, role='employee', active=True).first()
         if not found: flash('Employee was not found or is inactive.')
         else:
@@ -475,12 +546,13 @@ def redeem():
                 else:
                     allocation.spent += value
                     r = Redemption(employee_user_id=found.id, merchant_user_id=current_user.id, allocation_id=allocation.id, amount=value, reference=secrets.token_urlsafe(12)); db.session.add(r); db.session.commit(); flash(f'Redemption successful: {value} ETB. Remaining: {allocation.remaining} ETB.'); return redirect(url_for('redeem'))
-    return render_template('redeem.html', title='Redeem coupons', found=found, allocation=allocation)
+    return render_template('redeem.html', title='Redeem Coupons', found=found, allocation=allocation)
+
 @app.route('/admin/reset-password/<int:user_id>', methods=['POST'])
 @role_required('admin')
 def reset_single_password(user_id):
     user = User.query.get_or_404(user_id)
-    user.password_hash = generate_password_hash('12345678')
+    user.set_password('12345678')
     user.must_change_password = True
     db.session.commit()
     flash(f"Password for {user.full_name} has been reset to initial '12345678'.", 'success')
@@ -531,7 +603,7 @@ def users_admin():
             u = User(username=username, role=role, full_name=name, sector=sector, must_change_password=True); u.set_password(password); db.session.add(u); db.session.commit(); flash(f'{role.title()} account created.')
         return redirect(url_for('users_admin'))
     users = User.query.filter(User.role.in_(['admin', 'authority', 'merchant'])).order_by(User.role, User.username).all()
-    return render_template('users_admin.html', title='Operator accounts', users=users)
+    return render_template('users_admin.html', title='Operator Accounts', users=users)
 
 @app.route('/health')
 def health():
@@ -552,4 +624,4 @@ scheduler.add_job(monthly_rollover, 'cron', hour=0, minute=10, id='ethiopian_mon
 scheduler.start()
 
 if __name__ == '__main__':
-   app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
