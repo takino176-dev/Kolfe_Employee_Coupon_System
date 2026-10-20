@@ -442,3 +442,12 @@ scheduler.add_job(monthly_rollover,'cron',hour=0,minute=10,id='ethiopian_month_r
 scheduler.start()
 
 if __name__=='__main__': app.run(host='0.0.0.0',port=int(os.getenv('PORT',5000)),debug=False)
+# Updated column detection for your Excel sheet
+for col in df.columns:
+    col_clean = str(col).strip().lower()
+    if 'id' in col_clean:
+        id_col = col
+    elif 'name' in col_clean:
+        name_col = col
+    elif 'sector' in col_clean or 'department' in col_clean:
+        sector_col = col
