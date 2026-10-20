@@ -432,21 +432,45 @@ def print_coupons():
 
     return render_template('print.html', title='Print coupons', print_data=print_data, org=org, coupon_title=title, month=month, value=val_str, usage_note=usage_note, qr_data_uri=qr_data_uri)
 
+import qrcode
+import base64
+from io import BytesIO
+
 @app.route('/admin/print-ids')
 @role_required('admin')
 def print_ids():
-    ids = request.args.get('ids', '').strip(); sector = request.args.get('sector', '').strip(); eid = request.args.get('employee_id', '').strip()
-    q = User.query.filter_by(role='employee', active=True)
-    if ids:
-        try: q = q.filter(User.id.in_([int(x) for x in ids.split(',') if x.strip()]))
-        except: pass
-    elif eid: q = q.filter_by(employee_id=eid)
-    elif sector: q = q.filter_by(sector=sector)
-    else: abort(400, 'Choose an employee, sector, or selected employee IDs.')
-    users = q.order_by(User.employee_id).all()
-    org = request.args.get('org', 'ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል')
-    return render_template('print_ids.html', title='Print Employee QR Badges', users=users, org=org, qr_data_uri=qr_data_uri)
+    sector = request.args.get('sector', '').strip()
+    employee_id = request.args.get('employee_id', '').strip()
+    org = request.args.get('org', 'ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር')
+    
+    query = User.query.filter_by(role='employee')
+    if sector:
+        query = query.filter(User.sector.ilike(f"%{sector}%"))
+    if employee_id:
+        query = query.filter(User.employee_id.ilike(f"%{employee_id}%"))
+    
+    users = query.all()
+    
+    # Generate inline base64 QR code data URI for each employee badge
+    def qr_data_uri(user):
+        try:
+            qr = qrcode.QRCode(box_size=5, border=1)
+            qr.add_data(f"ID:{user.employee_id}|NAME:{user.full_name}|SECTOR:{user.sector}")
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
+        except Exception:
+            return ""
 
+    return render_template(
+        'print_ids.html', 
+        users=users, 
+        org=org, 
+        title="Employee ID Badges", 
+        qr_data_uri=qr_data_uri
+    )
 @app.route('/redeem', methods=['GET', 'POST'])
 @role_required('merchant', 'authority')
 def redeem():
