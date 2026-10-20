@@ -473,44 +473,15 @@ def print_coupons():
 
     return render_template('print.html', title='Print Coupons', print_data=print_data, org=org, coupon_title=title, month=month, value=val_str, usage_note=usage_note, qr_data_uri=qr_data_uri)
 
-@app.route('/admin/print-ids')
-@role_required('admin')
-def print_ids():
-    sector = request.args.get('sector', '').strip()
-    employee_id = request.args.get('employee_id', '').strip()
-    org = request.args.get('org', 'ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር')
-    
-    query = User.query.filter_by(role='employee')
-    if sector:
-        query = query.filter(User.sector.ilike(f"%{sector}%"))
-    if employee_id:
-        query = query.filter(User.employee_id.ilike(f"%{employee_id}%"))
-    
-    users = query.all()
-    
-    badge_data = []
-    for user in users:
-        qr_uri = ""
-        try:
-            payload = str(user.employee_id)
-            img = qrcode.make(payload)
-            buffered = BytesIO()
-            img.save(buffered, format="PNG")
-            qr_uri = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
-        except Exception as e:
-            print(f"QR Gen Error for {user.employee_id}: {e}")
-            
-        badge_data.append({
-            'user': user,
-            'qr_uri': qr_uri
-        })
-
-    return render_template(
-        'print_ids.html', 
-        badges=badge_data, 
-        org=org, 
-        title="Employee ID Badges"
-    )
+Flask
+Flask-SQLAlchemy
+Flask-Login
+Werkzeug
+openpyxl
+qrcode
+Pillow
+apscheduler
+gunicorn
 
 @app.route('/redeem', methods=['GET', 'POST'])
 @role_required('merchant', 'authority')

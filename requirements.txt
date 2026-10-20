@@ -4,6 +4,6 @@ Flask-Login
 Werkzeug
 openpyxl
 qrcode
+Pillow
 apscheduler
 gunicorn
-Pillow
