@@ -1,248 +1,371 @@
-import os
-from flask import Flask, render_template, request, redirect, url_for, flash, session
-import pandas as pd
-import sqlite3
+import os, io, csv, json, base64, secrets
+from datetime import datetime, date, timedelta
+from functools import wraps
+from flask import Flask, request, redirect, url_for, flash, render_template, session, send_file, abort
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+import qrcode
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
-app.secret_key = 'super_secret_key_change_in_production'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change-this-secret-before-production-' + secrets.token_hex(8))
+db_url = os.getenv('DATABASE_URL', 'sqlite:///kolfe_coupons.db')
+if db_url.startswith('postgres://'): db_url = db_url.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-DB_NAME = 'coupon_system.db'
+db = SQLAlchemy(app)
+login_manager = LoginManager(app); login_manager.login_view = 'login'
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+try:
+    from convertdate import ethiopian
+except Exception:
+    ethiopian = None
 
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Admins / Users Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT DEFAULT 'admin'
-        )
-    ''')
-    
-    # Employees Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS employees (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT NOT NULL,
-            sector TEXT NOT NULL,
-            phone TEXT,
-            status TEXT DEFAULT 'Active'
-        )
-    ''')
-    
-    # Merchants Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS merchants (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            phone TEXT,
-            location TEXT
-        )
-    ''')
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='employee') # admin, authority, merchant, employee
+    full_name = db.Column(db.String(200), nullable=False, default='')
+    employee_id = db.Column(db.String(80), unique=True, index=True)
+    sector = db.Column(db.String(150), nullable=False, default='')
+    must_change_password = db.Column(db.Boolean, default=True, nullable=False)
+    active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    def set_password(self, value): self.password_hash = generate_password_hash(value)
+    def check_password(self, value): return check_password_hash(self.password_hash, value)
 
-    # Allocations / Coupons Record Table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS allocations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            employee_id INTEGER,
-            month TEXT NOT NULL,
-            year TEXT NOT NULL,
-            coupon_count INTEGER DEFAULT 24,
-            coupon_value REAL DEFAULT 40.0,
-            status TEXT DEFAULT 'Issued',
-            FOREIGN KEY (employee_id) REFERENCES employees (id)
-        )
-    ''')
-    
-    # Default admin creation if none exists
-    cursor.execute('SELECT * FROM users WHERE username = ?', ('admin',))
-    if not cursor.fetchone():
-        hashed_pw = generate_password_hash('admin123')
-        cursor.execute('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', ('admin', hashed_pw, 'admin'))
-        
-    conn.commit()
-    conn.close()
+class Allocation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    month_key = db.Column(db.String(20), nullable=False, index=True)
+    allocated = db.Column(db.Integer, nullable=False, default=0) # ETB whole numbers
+    spent = db.Column(db.Integer, nullable=False, default=0)
+    expires_at = db.Column(db.Date, nullable=False)
+    closed = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref='allocations')
+    __table_args__ = (db.UniqueConstraint('user_id','month_key', name='uq_user_month'),)
+    @property
+    def remaining(self): return max(0, self.allocated - self.spent)
 
-init_db()
+class SectorBudget(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sector = db.Column(db.String(150), unique=True, nullable=False)
+    monthly_amount = db.Column(db.Integer, nullable=False, default=0)
 
-# --- ROUTES ---
+class Redemption(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    employee_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    merchant_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    allocation_id = db.Column(db.Integer, db.ForeignKey('allocation.id'), nullable=False)
+    amount = db.Column(db.Integer, nullable=False)
+    reference = db.Column(db.String(100), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    employee = db.relationship('User', foreign_keys=[employee_user_id])
+    merchant = db.relationship('User', foreign_keys=[merchant_user_id])
+    allocation = db.relationship('Allocation')
 
-@app.route('/')
-def index():
-    if 'user' in session:
-        return redirect(url_for('admin'))
-    return redirect(url_for('login'))
+@login_manager.user_loader
+def load_user(user_id): return db.session.get(User, int(user_id))
 
-@app.route('/login', methods=['GET', 'POST'])
+def role_required(*roles):
+    def deco(fn):
+        @wraps(fn)
+        @login_required
+        def wrapped(*args, **kwargs):
+            if current_user.role not in roles: abort(403)
+            if current_user.must_change_password and request.endpoint not in ('change_password','logout','static'):
+                return redirect(url_for('change_password'))
+            return fn(*args, **kwargs)
+        return wrapped
+    return deco
+
+def ethiopian_info(d=None):
+    d = d or date.today()
+    if ethiopian:
+        ey, em, ed = ethiopian.from_gregorian(d.year, d.month, d.day)
+        names = ['መስከረም','ጥቅምት','ኅዳር','ታኅሳስ','ጥር','የካቲት','መጋቢት','ሚያዝያ','ግንቦት','ሰኔ','ሐምሌ','ነሐሴ','ጳጉሜ']
+        month_key = f'{ey:04d}-{em:02d}'
+        # first day of following Ethiopian month, converted to Gregorian for expiry
+        if em == 13: ny, nm = ey + 1, 1
+        elif em == 12: ny, nm = ey, 13
+        else: ny, nm = ey, em + 1
+        next_g = ethiopian.to_gregorian(ny, nm, 1)
+        expiry = date(*next_g) - timedelta(days=1)
+        return {'year':ey,'month':em,'day':ed,'month_name':names[em-1], 'key':month_key,'expiry':expiry}
+    # Safe fallback if calendar package is unavailable; Gregorian month key is used.
+    first_next = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return {'year':d.year,'month':d.month,'day':d.day,'month_name':d.strftime('%B'),'key':d.strftime('%Y-%m'),'expiry':first_next-timedelta(days=1)}
+
+def qr_data(user):
+    # Plain-text payload only: identity fields from the employee record; never a balance or secret.
+    # Labels make the payload readable by ordinary phone-camera QR scanners.
+    return f'Full Name: {user.full_name}\nID: {user.employee_id or ''}\nSector: {user.sector}'
+
+def qr_data_uri(user):
+    img = qrcode.make(qr_data(user)); buf=io.BytesIO(); img.save(buf, format='PNG')
+    return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+def current_allocation(user):
+    info=ethiopian_info()
+    return Allocation.query.filter_by(user_id=user.id, month_key=info['key']).first()
+
+def create_allocation(user, amount, info=None):
+    info=info or ethiopian_info()
+    existing=Allocation.query.filter_by(user_id=user.id, month_key=info['key']).first()
+    if existing:
+        existing.allocated=int(amount); existing.expires_at=info['expiry']; existing.closed=False
+        return existing
+    obj=Allocation(user_id=user.id, month_key=info['key'], allocated=int(amount), spent=0, expires_at=info['expiry'])
+    db.session.add(obj); return obj
+
+def monthly_rollover():
+    """Close expired allocations and create this month's allocations from configured sector budgets."""
+    with app.app_context():
+        info=ethiopian_info()
+        Allocation.query.filter(Allocation.month_key != info['key'], Allocation.closed == False).update({'closed':True}, synchronize_session=False)
+        budgets={b.sector:b.monthly_amount for b in SectorBudget.query.all()}
+        employees=User.query.filter_by(role='employee', active=True).all()
+        for u in employees:
+            if not Allocation.query.filter_by(user_id=u.id, month_key=info['key']).first():
+                amount=budgets.get(u.sector, 0)
+                create_allocation(u, amount, info)
+        db.session.commit()
+
+BASE = '''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ title or 'Kolfe Coupon System' }}</title><style>
+:root{--navy:#12304a;--blue:#176b87;--gold:#e6ad36;--bg:#f3f6f9;--ink:#203040}*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px Arial,sans-serif;color:var(--ink)}header{background:var(--navy);color:#fff;padding:15px 4%;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}header a{color:#fff;text-decoration:none;margin-right:12px}.brand{font-weight:bold;font-size:18px}.wrap{max-width:1200px;margin:24px auto;padding:0 16px}.card{background:white;padding:20px;border-radius:12px;box-shadow:0 2px 12px #152b3b12;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.metric{font-size:28px;font-weight:bold;color:var(--blue)}label{display:block;font-weight:bold;margin:12px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #cbd5df;border-radius:7px;font-size:15px}button,.btn{display:inline-block;border:0;background:var(--blue);color:#fff;padding:10px 14px;border-radius:7px;text-decoration:none;cursor:pointer;font-weight:bold}.secondary{background:#64748b}.danger{background:#a33}.gold{background:#a66a00}table{width:100%;border-collapse:collapse;background:white}th,td{padding:10px;border-bottom:1px solid #e3e8ee;text-align:left;vertical-align:top}th{background:#edf3f6} .table-scroll{overflow-x:auto}.flash{padding:12px;background:#fff3cf;border-radius:8px;margin-bottom:12px}.muted{color:#667788;font-size:13px}.inline{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.inline>div{flex:1;min-width:170px}.coupon-page{width:210mm;min-height:297mm;padding:7mm;margin:auto;background:#fff;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(8,1fr);gap:2mm;page-break-after:always}.coupon{border:1px dashed #555;padding:2.5mm;display:flex;gap:3mm;align-items:center;overflow:hidden;font-size:9pt}.coupon img{width:24mm;height:24mm}.coupon-text{min-width:0}.coupon h4{font-size:9pt;margin:0 0 2mm}.coupon p{margin:1mm 0;overflow-wrap:anywhere}.print-top{max-width:900px;margin:15px auto}.no-print{display:block}@media print{body{background:#fff}.no-print{display:none!important}.coupon-page{margin:0;box-shadow:none;break-after:page}.wrap{margin:0;padding:0}}@media(max-width:600px){header{align-items:flex-start}.wrap{margin:12px auto}.card{padding:14px}}
+</style></head><body><header><div class="brand">Kolfe Employee Coupon System</div><nav>{% if current_user.is_authenticated %}<a href="{{ url_for('dashboard') }}">Dashboard</a>{% if current_user.role=='admin' %}<a href="{{ url_for('employees') }}">Employees</a><a href="{{ url_for('allocations') }}">Allocations</a><a href="{{ url_for('budgets') }}">Sector budgets</a><a href="{{ url_for('reports') }}">Reports</a>{% endif %}{% if current_user.role in ['merchant','authority'] %}<a href="{{ url_for('redeem') }}">Redeem</a>{% endif %}<a href="{{ url_for('change_password') }}">Password</a><a href="{{ url_for('logout') }}">Logout</a>{% else %}<a href="{{ url_for('login') }}">Login</a>{% endif %}</nav></header><main class="wrap">{% with messages=get_flashed_messages() %}{% for m in messages %}<div class="flash">{{m}}</div>{% endfor %}{% endwith %}{% block body %}{% endblock %}</main></body></html>'''
+
+@app.route('/login', methods=['GET','POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        conn = get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-        conn.close()
-        
-        if user and check_password_hash(user['password'], password):
-            session['user'] = user['username']
-            session['role'] = user['role']
-            return redirect(url_for('admin'))
-        else:
-            flash('የተሳሳተ የተጠቃሚ ስም ወይም የይለፍ ቃል!', 'danger')
-            
-    return render_template('login.html')
+    if request.method=='POST':
+        u=User.query.filter_by(username=request.form.get('username','').strip()).first()
+        if u and u.active and u.check_password(request.form.get('password','')):
+            login_user(u); return redirect(url_for('change_password' if u.must_change_password else 'dashboard'))
+        flash('Invalid username/password or inactive account.')
+    return render_template('login.html', title='Login')
 
 @app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
+@login_required
+def logout(): logout_user(); return redirect(url_for('login'))
 
-@app.route('/admin')
-def admin():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-        
-    conn = get_db_connection()
-    emp_count = conn.execute('SELECT COUNT(*) FROM employees').fetchone()[0]
-    alloc_count = conn.execute('SELECT COUNT(*) FROM allocations').fetchone()[0]
-    merchant_count = conn.execute('SELECT COUNT(*) FROM merchants').fetchone()[0]
-    conn.close()
-    
-    return render_template('admin.html', emp_count=emp_count, alloc_count=alloc_count, merchant_count=merchant_count)
-
-@app.route('/employees')
-def employees():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-        
-    conn = get_db_connection()
-    emp_list = conn.execute('SELECT * FROM employees ORDER BY id DESC').fetchall()
-    conn.close()
-    return render_template('employees.html', employees=emp_list)
-
-@app.route('/employee/add', methods=['GET', 'POST'])
-def employee_form():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-        
-    if request.method == 'POST':
-        full_name = request.form.get('full_name')
-        sector = request.form.get('sector')
-        phone = request.form.get('phone')
-        
-        conn = get_db_connection()
-        conn.execute('INSERT INTO employees (full_name, sector, phone) VALUES (?, ?, ?)', (full_name, sector, phone))
-        conn.commit()
-        conn.close()
-        
-        flash('ሰራተኛው በትክክል ተመዝግቧል!', 'success')
-        return redirect(url_for('employees'))
-        
-    return render_template('employee_form.html')
-
-@app.route('/upload', methods=['GET', 'POST'])
-def upload():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-        
-    if request.method == 'POST':
-        file = request.files.get('file')
-        if file and file.filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(file)
-            conn = get_db_connection()
-            
-            for _, row in df.iterrows():
-                name = row.get('ስም') or row.get('full_name') or row.get('Full Name')
-                sector = row.get('ዘርፍ') or row.get('ተቋም') or row.get('sector') or 'አልተገለጸም'
-                phone = row.get('ስልክ') or row.get('phone') or ''
-                
-                if name:
-                    conn.execute('INSERT INTO employees (full_name, sector, phone) VALUES (?, ?, ?)', (str(name), str(sector), str(phone)))
-            
-            conn.commit()
-            conn.close()
-            flash('የሰራተኞች መረጃ ከ Excel በትክክል ተጭኗል!', 'success')
-            return redirect(url_for('employees'))
+@app.route('/change-password', methods=['GET','POST'])
+@login_required
+def change_password():
+    if request.method=='POST':
+        old=request.form.get('old_password',''); new=request.form.get('new_password','')
+        if not current_user.check_password(old): flash('Current password is incorrect.')
+        elif len(new)<8: flash('New password must contain at least 8 characters.')
         else:
-            flash('እባክዎን ትክክለኛ Excel (.xlsx) ፋይል ይምረጡ!', 'danger')
-            
-    return render_template('upload.html')
+            current_user.set_password(new); current_user.must_change_password=False; db.session.commit(); flash('Password changed successfully.'); return redirect(url_for('dashboard'))
+    return render_template('change_password.html', title='Change password')
 
-@app.route('/print_cards')
-def print_cards():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-        
-    month = request.args.get('month', 'መስከረም')
-    year = request.args.get('year', '2019')
-    
-    conn = get_db_connection()
-    employees_data = conn.execute('SELECT * FROM employees WHERE status = "Active"').fetchall()
-    sectors = [row['sector'] for row in conn.execute('SELECT DISTINCT sector FROM employees').fetchall()]
-    conn.close()
-    
-    return render_template('print_cards.html', employees=employees_data, sectors=sectors, month=month, year=year)
+@app.route('/')
+@login_required
+def dashboard():
+    if current_user.must_change_password: return redirect(url_for('change_password'))
+    info=ethiopian_info()
+    if current_user.role=='employee':
+        a=current_allocation(current_user); history=Redemption.query.filter_by(employee_user_id=current_user.id).order_by(Redemption.created_at.desc()).limit(20).all()
+        return render_template('employee_dashboard.html',title='My balance',info=info,a=a,history=history)
+    if current_user.role in ('merchant','authority'):
+        total=db.session.query(db.func.coalesce(db.func.sum(Redemption.amount),0)).filter_by(merchant_user_id=current_user.id).scalar()
+        recent=Redemption.query.filter_by(merchant_user_id=current_user.id).order_by(Redemption.created_at.desc()).limit(20).all()
+        return render_template('operator_dashboard.html',title='Operator dashboard',total=total,recent=recent)
+    counts={r:User.query.filter_by(role=r,active=True).count() for r in ('employee','merchant','authority','admin')}
+    info=ethiopian_info(); spent=db.session.query(db.func.coalesce(db.func.sum(Allocation.spent),0)).filter_by(month_key=info['key']).scalar(); alloc=db.session.query(db.func.coalesce(db.func.sum(Allocation.allocated),0)).filter_by(month_key=info['key']).scalar()
+    return render_template('admin_dashboard.html',title='Admin dashboard',counts=counts,info=info,spent=spent,alloc=alloc)
 
-@app.route('/merchants')
-def merchants():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-        
-    conn = get_db_connection()
-    merchants_list = conn.execute('SELECT * FROM merchants').fetchall()
-    conn.close()
-    return render_template('merchants.html', merchants=merchants_list)
+@app.route('/admin/employees', methods=['GET','POST'])
+@role_required('admin')
+def employees():
+    if request.method=='POST':
+        action=request.form.get('action')
+        if action=='import':
+            f=request.files.get('file')
+            if not f or not f.filename.lower().endswith(('.csv','.xlsx')): flash('Upload a .csv or .xlsx file.'); return redirect(url_for('employees'))
+            try:
+                if f.filename.lower().endswith('.csv'):
+                    rows=list(csv.DictReader(io.StringIO(f.stream.read().decode('utf-8-sig'))))
+                else:
+                    import pandas as pd
+                    rows=pd.read_excel(f).fillna('').to_dict(orient='records')
+                created=0; updated=0
+                for row in rows:
+                    row={str(k).strip().lower().replace(' ','_'):str(v).strip() for k,v in row.items()}
+                    eid=row.get('employee_id') or row.get('user_id') or row.get('id')
+                    name=row.get('full_name') or row.get('name')
+                    sector=row.get('sector') or row.get('department')
+                    if not eid or not name or not sector: continue
+                    u=User.query.filter_by(employee_id=eid).first()
+                    if not u:
+                        username=eid
+                        if User.query.filter_by(username=username).first(): username=eid+'_'+secrets.token_hex(2)
+                        u=User(username=username,role='employee',employee_id=eid,full_name=name,sector=sector,must_change_password=True); u.set_password(secrets.token_urlsafe(8)); db.session.add(u); created+=1
+                    else: u.full_name=name; u.sector=sector; updated+=1
+                db.session.commit(); flash(f'Import complete: {created} created, {updated} updated. Default usernames are employee IDs; use Reset password to issue credentials.')
+            except Exception as e: db.session.rollback(); flash('Could not import file. Check column names and file format. Details: '+str(e)[:180])
+            return redirect(url_for('employees'))
+        if action=='create':
+            eid=request.form.get('employee_id','').strip(); name=request.form.get('full_name','').strip(); sector=request.form.get('sector','').strip(); username=request.form.get('username','').strip() or eid
+            if not eid or not name or not sector: flash('Employee ID, full name and sector are required.')
+            elif User.query.filter((User.employee_id==eid)|(User.username==username)).first(): flash('Employee ID or username already exists.')
+            else:
+                u=User(employee_id=eid,full_name=name,sector=sector,username=username,role='employee'); temp=request.form.get('password','') or secrets.token_urlsafe(8); u.set_password(temp); db.session.add(u); db.session.commit(); flash(f'Employee created. Username: {username}; temporary password: {temp}')
+            return redirect(url_for('employees'))
+        if action=='reset':
+            u=db.session.get(User,int(request.form.get('user_id')))
+            if u:
+                temp=secrets.token_urlsafe(8); u.set_password(temp); u.must_change_password=True; db.session.commit(); flash(f'Temporary password for {u.username}: {temp}')
+            return redirect(url_for('employees'))
+        if action=='deactivate':
+            u=db.session.get(User,int(request.form.get('user_id')))
+            if u: u.active=False; db.session.commit(); flash('Account deactivated.')
+            return redirect(url_for('employees'))
+    q=request.args.get('q','').strip(); sector=request.args.get('sector','').strip()
+    query=User.query.filter_by(role='employee')
+    if q: query=query.filter(db.or_(User.employee_id.ilike(f'%{q}%'),User.full_name.ilike(f'%{q}%'),User.username.ilike(f'%{q}%')))
+    if sector: query=query.filter_by(sector=sector)
+    page=max(1,int(request.args.get('page',1))); pagination=query.order_by(User.employee_id).paginate(page=page,per_page=100,error_out=False)
+    sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()]
+    return render_template('employees.html',title='Employees',pagination=pagination,sectors=sectors,q=q,sector=sector)
 
-@app.route('/create_merchant', methods=['GET', 'POST'])
-def create_merchant():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-        
-    if request.method == 'POST':
-        name = request.form.get('name')
-        phone = request.form.get('phone')
-        location = request.form.get('location')
-        
-        conn = get_db_connection()
-        conn.execute('INSERT INTO merchants (name, phone, location) VALUES (?, ?, ?)', (name, phone, location))
-        conn.commit()
-        conn.close()
-        
-        flash('አገልግሎት ሰጪው (Merchant) ተመዝግቧል!', 'success')
-        return redirect(url_for('merchants'))
-        
-    return render_template('create_merchant.html')
-
-@app.route('/allocations')
+@app.route('/admin/allocations', methods=['GET','POST'])
+@role_required('admin')
 def allocations():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-        
-    conn = get_db_connection()
-    allocs = conn.execute('''
-        SELECT a.*, e.full_name, e.sector 
-        FROM allocations a 
-        JOIN employees e ON a.employee_id = e.id 
-        ORDER BY a.id DESC
-    ''').fetchall()
-    conn.close()
-    return render_template('allocations.html', allocations=allocs)
+    info=ethiopian_info()
+    if request.method=='POST':
+        action=request.form.get('action'); amount=request.form.get('amount','0')
+        try: amount=int(amount)
+        except: amount=-1
+        if amount<0: flash('Amount must be zero or greater.'); return redirect(url_for('allocations'))
+        if action=='single':
+            u=User.query.filter_by(employee_id=request.form.get('employee_id','').strip(),role='employee',active=True).first()
+            if not u: flash('Employee not found or inactive.')
+            else: create_allocation(u,amount,info); db.session.commit(); flash(f'Allocated {amount} ETB to {u.full_name} for {info["key"]}.')
+        elif action=='sector':
+            sector=request.form.get('sector','').strip(); users=User.query.filter_by(role='employee',sector=sector,active=True).all()
+            for u in users: create_allocation(u,amount,info)
+            db.session.commit(); flash(f'Allocated {amount} ETB to {len(users)} employees in {sector}.')
+        return redirect(url_for('allocations'))
+    sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()]
+    recent=Allocation.query.filter_by(month_key=info['key']).order_by(Allocation.created_at.desc()).limit(100).all()
+    return render_template('allocations.html',title='Monthly allocations',info=info,sectors=sectors,recent=recent)
 
-@app.route('/reports')
+@app.route('/admin/budgets', methods=['GET','POST'])
+@role_required('admin')
+def budgets():
+    if request.method=='POST':
+        sector=request.form.get('sector','').strip()
+        try: amount=int(request.form.get('amount','0'))
+        except: amount=-1
+        if not sector or amount<0: flash('Enter a sector and a non-negative amount.')
+        else:
+            b=SectorBudget.query.filter_by(sector=sector).first()
+            if not b: b=SectorBudget(sector=sector); db.session.add(b)
+            b.monthly_amount=amount; db.session.commit(); flash('Sector monthly default saved. This is used by automatic monthly rollover.')
+        return redirect(url_for('budgets'))
+    return render_template('budgets.html',title='Sector budgets',budgets=SectorBudget.query.order_by(SectorBudget.sector).all(),sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()])
+
+@app.route('/admin/print')
+@role_required('admin')
+def print_coupons():
+    ids=request.args.get('ids','').strip(); sector=request.args.get('sector','').strip(); eid=request.args.get('employee_id','').strip()
+    q=User.query.filter_by(role='employee',active=True)
+    if ids:
+        try: q=q.filter(User.id.in_([int(x) for x in ids.split(',') if x.strip()]))
+        except: pass
+    elif eid: q=q.filter_by(employee_id=eid)
+    elif sector: q=q.filter_by(sector=sector)
+    else: abort(400, 'Choose an employee, sector, or selected employee IDs.')
+    users=q.order_by(User.employee_id).all(); info=ethiopian_info()
+    org=request.args.get('org','ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል')
+    title=request.args.get('coupon_title','የሰራተኞች ኩፖን መጠቀሚያ'); month=request.args.get('month',f'{info["month_name"]} ወር {info["year"]} ዓ.ም'); value=request.args.get('value','40 ብር')
+    return render_template('print.html',title='Print coupons',users=users,org=org,coupon_title=title,month=month,value=value,qr_data_uri=qr_data_uri)
+
+@app.route('/redeem', methods=['GET','POST'])
+@role_required('merchant','authority')
+def redeem():
+    found=None; allocation=None
+    if request.method=='POST':
+        raw=request.form.get('qr_data','').strip(); eid=request.form.get('employee_id','').strip(); amount=request.form.get('amount','')
+        if raw:
+            # Accept legacy JSON QR codes and the specified plain-text QR payload.
+            try:
+                data=json.loads(raw)
+                eid=str(data.get('employee_id','')).strip()
+            except (json.JSONDecodeError, TypeError):
+                eid=''
+                for line in raw.splitlines():
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        if key.strip().lower() in ('id', 'employee id', 'employee_id'):
+                            eid=value.strip(); break
+                if not eid:
+                    # Also accept a scanner that returns just the employee ID.
+                    eid=raw.strip() if '\n' not in raw and ':' not in raw else ''
+                if not eid:
+                    flash('QR text must contain an ID field.'); return render_template('redeem.html',title='Redeem coupons',found=None,allocation=None)
+        found=User.query.filter_by(employee_id=eid,role='employee',active=True).first()
+        if not found: flash('Employee was not found or is inactive.')
+        else:
+            allocation=current_allocation(found)
+            if request.form.get('confirm')=='yes':
+                try: value=int(amount)
+                except: value=0
+                if not allocation: flash('No allocation exists for the current Ethiopian month.')
+                elif allocation.closed or value<=0: flash('Enter a valid positive amount.')
+                elif value>allocation.remaining: flash(f'Insufficient balance. Remaining: {allocation.remaining} ETB.')
+                else:
+                    allocation.spent+=value
+                    r=Redemption(employee_user_id=found.id,merchant_user_id=current_user.id,allocation_id=allocation.id,amount=value,reference=secrets.token_urlsafe(12)); db.session.add(r); db.session.commit(); flash(f'Redemption successful: {value} ETB. Employee balance remaining: {allocation.remaining} ETB.'); return redirect(url_for('redeem'))
+    return render_template('redeem.html',title='Redeem coupons',found=found,allocation=allocation)
+
+@app.route('/admin/reports')
+@role_required('admin')
 def reports():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-        
-    return render_template('reports.html')
+    info=ethiopian_info(); sector_rows=db.session.query(User.sector,db.func.coalesce(db.func.sum(Allocation.allocated),0),db.func.coalesce(db.func.sum(Allocation.spent),0)).join(Allocation,Allocation.user_id==User.id).filter(User.role=='employee',Allocation.month_key==info['key']).group_by(User.sector).all()
+    merchants=db.session.query(User.username,User.full_name,db.func.coalesce(db.func.sum(Redemption.amount),0)).join(Redemption,Redemption.merchant_user_id==User.id).filter(User.role.in_(['merchant','authority']),db.func.strftime('%Y-%m',Redemption.created_at)==datetime.utcnow().strftime('%Y-%m')).group_by(User.id).all() if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI'] else []
+    redemptions=Redemption.query.order_by(Redemption.created_at.desc()).limit(500).all()
+    if request.args.get('download')=='csv':
+        out=io.StringIO(); w=csv.writer(out); w.writerow(['Timestamp UTC','Employee ID','Employee Name','Sector','Merchant Username','Amount ETB','Reference'])
+        for r in redemptions: w.writerow([r.created_at.isoformat(),r.employee.employee_id,r.employee.full_name,r.employee.sector,r.merchant.username,r.amount,r.reference])
+        return send_file(io.BytesIO(out.getvalue().encode('utf-8-sig')),mimetype='text/csv',as_attachment=True,download_name='coupon_redemptions.csv')
+    return render_template('reports.html',title='Reports',info=info,sector_rows=sector_rows,merchants=merchants,redemptions=redemptions)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.route('/admin/users', methods=['GET','POST'])
+@role_required('admin')
+def users_admin():
+    if request.method=='POST':
+        username=request.form.get('username','').strip(); role=request.form.get('role','merchant'); name=request.form.get('full_name','').strip(); sector=request.form.get('sector','').strip(); password=request.form.get('password','')
+        if role not in ('admin','authority','merchant') or not username or not name or len(password)<8: flash('Use a username, full name, valid role and password of at least 8 characters.')
+        elif User.query.filter_by(username=username).first(): flash('Username already exists.')
+        else:
+            u=User(username=username,role=role,full_name=name,sector=sector,must_change_password=True); u.set_password(password); db.session.add(u); db.session.commit(); flash(f'{role.title()} account created; user must change password at first login.')
+        return redirect(url_for('users_admin'))
+    users=User.query.filter(User.role.in_(['admin','authority','merchant'])).order_by(User.role,User.username).all()
+    return render_template('users_admin.html',title='Operator accounts',users=users)
+
+@app.route('/health')
+def health(): return {'status':'ok'}
+
+with app.app_context():
+    db.create_all()
+    admin_username=os.getenv('ADMIN_USERNAME','admin')
+    admin_password=os.getenv('ADMIN_PASSWORD', 'ChangeMe123!')
+    if not User.query.filter_by(role='admin').first():
+        u=User(username=admin_username,full_name='System Administrator',role='admin',must_change_password=True)
+        u.set_password(admin_password or secrets.token_urlsafe(12)); db.session.add(u); db.session.commit()
+        print('INITIAL ADMIN USERNAME:',admin_username)
+        if admin_password == 'ChangeMe123!': print('WARNING: default admin password is ChangeMe123! Change it immediately, and set ADMIN_PASSWORD in production.')
+
+scheduler=BackgroundScheduler(daemon=True)
+scheduler.add_job(monthly_rollover,'cron',hour=0,minute=10,id='ethiopian_month_rollover',replace_existing=True)
+scheduler.start()
+
+if __name__=='__main__': app.run(host='0.0.0.0',port=int(os.getenv('PORT',5000)),debug=False)

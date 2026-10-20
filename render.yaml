@@ -1,16 +1,24 @@
 services:
   - type: web
-    name: kolfe-employee-coupon
+    name: kolfe-coupon-system
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --workers 2 --threads 4 --timeout 120
+    startCommand: gunicorn app:app --workers 1 --threads 4 --timeout 120
+    healthCheckPath: /health
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
       - key: DATABASE_URL
         fromDatabase:
           name: kolfe-coupon-db
           property: connectionString
-      - key: SECRET_KEY
-        generateValue: true
+
 databases:
   - name: kolfe-coupon-db
     plan: basic-256mb
