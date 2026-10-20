@@ -1,1 +1,45 @@
-{% extends 'base.html' %}{% block body %}<h1>Admin Dashboard / የአስተዳዳሪ ዳሽቦርድ</h1><p class="muted">Current Ethiopian month: {{info.month_name}} {{info.year}} E.C. ({{info.key}})</p><div class="grid">{% for role,count in counts.items() %}<div class="card"><div>{{role.title()}} accounts</div><div class="metric">{{count}}</div></div>{% endfor %}<div class="card"><div>Monthly budget allocated</div><div class="metric">{{alloc}} ETB</div></div><div class="card"><div>Monthly redeemed</div><div class="metric">{{spent}} ETB</div></div></div><div class="card"><h3>Quick actions</h3><p><a class="btn" href="{{url_for('employees')}}">Manage / import employees</a> <a class="btn" href="{{url_for('allocations')}}">Allocate monthly budget</a> <a class="btn" href="{{url_for('users_admin')}}">Create merchant / authority</a> <a class="btn" href="{{url_for('reports')}}">Reports & CSV</a></p></div><div class="card"><h3>Important setup</h3><p>Set monthly default budgets by sector in <b>Sector budgets</b>. The daily rollover closes old Ethiopian-month allocations and provisions new ones from those configured defaults. Permanent employee QR codes are printed from the Print page.</p></div>{% endblock %}
+{% extends 'base.html' %}
+{% block body %}
+<h1>Admin Dashboard / የሥራ አስኪያጅ ዳሽቦርድ</h1>
+
+<div class="card">
+    <p><b>Welcome, Administrator!</b> Manage your system operations, employee records, coupon allocations, and reports below.</p>
+    
+    <!-- Quick Actions Toolbar -->
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+        <a href="{{ url_for('employees') }}" class="btn">👥 Employees & Upload</a>
+        <a href="{{ url_for('allocations') }}" class="btn gold">💰 Monthly Allocations</a>
+        <a href="{{ url_for('print_hub') }}" class="btn" style="background: #12304a;">🖨️ Print Hub</a>
+        <a href="{{ url_for('reports') }}" class="btn secondary">📊 Reports & CSV</a>
+        <a href="{{ url_for('users_admin') }}" class="btn secondary">⚙️ Operator Accounts</a>
+    </div>
+</div>
+
+<!-- System Statistics Grid -->
+<div class="grid" style="margin-top: 20px;">
+    <div class="card">
+        <div class="muted">Active Employees / ንቁ ሰራተኞች</div>
+        <div class="metric">{{ counts.employee }}</div>
+    </div>
+    <div class="card">
+        <div class="muted">Merchants & Authorities / ነጋዴዎች</div>
+        <div class="metric">{{ counts.merchant + counts.authority }}</div>
+    </div>
+    <div class="card">
+        <div class="muted">Month Allocated / የተመደበ በጀት</div>
+        <div class="metric">{{ alloc }} ETB</div>
+    </div>
+    <div class="card">
+        <div class="muted">Month Spent / ጥቅም ላይ የዋለ</div>
+        <div class="metric">{{ spent }} ETB</div>
+    </div>
+</div>
+
+<!-- Ethiopian Calendar Period Info -->
+<div class="card" style="margin-top: 20px;">
+    <h3>Ethiopian Calendar Period / የኢትዮጵያ ወር መረጃ</h3>
+    <p><b>Current Month:</b> {{ info.month_name }} {{ info.year }} E.C. (Key: {{ info.key }})</p>
+    <p class="muted">Automatic monthly rollover handles budget provisioning for active employees on the 1st of each Ethiopian month.</p>
+</div>
+
+{% endblock %}
