@@ -91,21 +91,17 @@ def ethiopian_info(d=None):
         ey, em, ed = ethiopian.from_gregorian(d.year, d.month, d.day)
         names = ['መስከረም','ጥቅምት','ኅዳር','ታኅሳስ','ጥር','የካቲት','መጋቢት','ሚያዝያ','ግንቦት','ሰኔ','ሐምሌ','ነሐሴ','ጳጉሜ']
         month_key = f'{ey:04d}-{em:02d}'
-        # first day of following Ethiopian month, converted to Gregorian for expiry
         if em == 13: ny, nm = ey + 1, 1
         elif em == 12: ny, nm = ey, 13
         else: ny, nm = ey, em + 1
         next_g = ethiopian.to_gregorian(ny, nm, 1)
         expiry = date(*next_g) - timedelta(days=1)
         return {'year':ey,'month':em,'day':ed,'month_name':names[em-1], 'key':month_key,'expiry':expiry}
-    # Safe fallback if calendar package is unavailable; Gregorian month key is used.
     first_next = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
     return {'year':d.year,'month':d.month,'day':d.day,'month_name':d.strftime('%B'),'key':d.strftime('%Y-%m'),'expiry':first_next-timedelta(days=1)}
 
 def qr_data(user):
-    # Plain-text payload only: identity fields from the employee record; never a balance or secret.
-    # Labels make the payload readable by ordinary phone-camera QR scanners.
-    return f'Full Name: {user.full_name}\nID: {user.employee_id or ''}\nSector: {user.sector}'
+    return f'Full Name: {user.full_name}\nID: {user.employee_id or ""}\nSector: {user.sector}'
 
 def qr_data_uri(user):
     img = qrcode.make(qr_data(user)); buf=io.BytesIO(); img.save(buf, format='PNG')
@@ -125,7 +121,6 @@ def create_allocation(user, amount, info=None):
     db.session.add(obj); return obj
 
 def monthly_rollover():
-    """Close expired allocations and create this month's allocations from configured sector budgets."""
     with app.app_context():
         info=ethiopian_info()
         Allocation.query.filter(Allocation.month_key != info['key'], Allocation.closed == False).update({'closed':True}, synchronize_session=False)
@@ -136,10 +131,6 @@ def monthly_rollover():
                 amount=budgets.get(u.sector, 0)
                 create_allocation(u, amount, info)
         db.session.commit()
-
-BASE = '''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ title or 'Kolfe Coupon System' }}</title><style>
-:root{--navy:#12304a;--blue:#176b87;--gold:#e6ad36;--bg:#f3f6f9;--ink:#203040}*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px Arial,sans-serif;color:var(--ink)}header{background:var(--navy);color:#fff;padding:15px 4%;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}header a{color:#fff;text-decoration:none;margin-right:12px}.brand{font-weight:bold;font-size:18px}.wrap{max-width:1200px;margin:24px auto;padding:0 16px}.card{background:white;padding:20px;border-radius:12px;box-shadow:0 2px 12px #152b3b12;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.metric{font-size:28px;font-weight:bold;color:var(--blue)}label{display:block;font-weight:bold;margin:12px 0 5px}input,select,textarea{width:100%;padding:10px;border:1px solid #cbd5df;border-radius:7px;font-size:15px}button,.btn{display:inline-block;border:0;background:var(--blue);color:#fff;padding:10px 14px;border-radius:7px;text-decoration:none;cursor:pointer;font-weight:bold}.secondary{background:#64748b}.danger{background:#a33}.gold{background:#a66a00}table{width:100%;border-collapse:collapse;background:white}th,td{padding:10px;border-bottom:1px solid #e3e8ee;text-align:left;vertical-align:top}th{background:#edf3f6} .table-scroll{overflow-x:auto}.flash{padding:12px;background:#fff3cf;border-radius:8px;margin-bottom:12px}.muted{color:#667788;font-size:13px}.inline{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.inline>div{flex:1;min-width:170px}.coupon-page{width:210mm;min-height:297mm;padding:7mm;margin:auto;background:#fff;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(8,1fr);gap:2mm;page-break-after:always}.coupon{border:1px dashed #555;padding:2.5mm;display:flex;gap:3mm;align-items:center;overflow:hidden;font-size:9pt}.coupon img{width:24mm;height:24mm}.coupon-text{min-width:0}.coupon h4{font-size:9pt;margin:0 0 2mm}.coupon p{margin:1mm 0;overflow-wrap:anywhere}.print-top{max-width:900px;margin:15px auto}.no-print{display:block}@media print{body{background:#fff}.no-print{display:none!important}.coupon-page{margin:0;box-shadow:none;break-after:page}.wrap{margin:0;padding:0}}@media(max-width:600px){header{align-items:flex-start}.wrap{margin:12px auto}.card{padding:14px}}
-</style></head><body><header><div class="brand">Kolfe Employee Coupon System</div><nav>{% if current_user.is_authenticated %}<a href="{{ url_for('dashboard') }}">Dashboard</a>{% if current_user.role=='admin' %}<a href="{{ url_for('employees') }}">Employees</a><a href="{{ url_for('allocations') }}">Allocations</a><a href="{{ url_for('budgets') }}">Sector budgets</a><a href="{{ url_for('reports') }}">Reports</a>{% endif %}{% if current_user.role in ['merchant','authority'] %}<a href="{{ url_for('redeem') }}">Redeem</a>{% endif %}<a href="{{ url_for('change_password') }}">Password</a><a href="{{ url_for('logout') }}">Logout</a>{% else %}<a href="{{ url_for('login') }}">Login</a>{% endif %}</nav></header><main class="wrap">{% with messages=get_flashed_messages() %}{% for m in messages %}<div class="flash">{{m}}</div>{% endfor %}{% endwith %}{% block body %}{% endblock %}</main></body></html>'''
 
 @app.route('/login', methods=['GET','POST'])
 def login():
@@ -181,6 +172,41 @@ def dashboard():
     info=ethiopian_info(); spent=db.session.query(db.func.coalesce(db.func.sum(Allocation.spent),0)).filter_by(month_key=info['key']).scalar(); alloc=db.session.query(db.func.coalesce(db.func.sum(Allocation.allocated),0)).filter_by(month_key=info['key']).scalar()
     return render_template('admin_dashboard.html',title='Admin dashboard',counts=counts,info=info,spent=spent,alloc=alloc)
 
+@app.route('/setup', methods=['GET', 'POST'])
+def setup_system():
+    if User.query.filter_by(role='admin').first():
+        flash('Admin account already exists! Please log in.')
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        username = request.form.get('username', 'admin').strip()
+        password = request.form.get('password', '').strip()
+        if len(password) < 8:
+            flash('Password must be at least 8 characters.')
+        else:
+            u = User(username=username, full_name='System Administrator', role='admin', must_change_password=False)
+            u.set_password(password)
+            db.session.add(u)
+            db.session.commit()
+            flash('Admin account created successfully! Please log in.')
+            return redirect(url_for('login'))
+    return '''
+        <!doctype html>
+        <title>System Setup</title>
+        <body style="font-family:Arial; padding:40px; max-width:400px; margin:auto; background:#f3f6f9;">
+            <div style="background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+                <h2>System Setup</h2>
+                <p>Create your initial administrator account:</p>
+                <form method="post">
+                    <label style="font-weight:bold; display:block; margin-top:10px;">Admin Username:</label>
+                    <input type="text" name="username" value="admin" style="width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:4px;">
+                    <label style="font-weight:bold; display:block; margin-top:10px;">Admin Password:</label>
+                    <input type="password" name="password" placeholder="At least 8 characters" style="width:100%; padding:8px; margin-top:5px; border:1px solid #ccc; border-radius:4px;">
+                    <button type="submit" style="width:100%; padding:10px; background:#176b87; color:#fff; border:none; border-radius:4px; font-weight:bold; margin-top:15px; cursor:pointer;">Create Admin Account</button>
+                </form>
+            </div>
+        </body>
+    '''
+
 @app.route('/admin/employees', methods=['GET','POST'])
 @role_required('admin')
 def employees():
@@ -208,8 +234,8 @@ def employees():
                         if User.query.filter_by(username=username).first(): username=eid+'_'+secrets.token_hex(2)
                         u=User(username=username,role='employee',employee_id=eid,full_name=name,sector=sector,must_change_password=True); u.set_password(secrets.token_urlsafe(8)); db.session.add(u); created+=1
                     else: u.full_name=name; u.sector=sector; updated+=1
-                db.session.commit(); flash(f'Import complete: {created} created, {updated} updated. Default usernames are employee IDs; use Reset password to issue credentials.')
-            except Exception as e: db.session.rollback(); flash('Could not import file. Check column names and file format. Details: '+str(e)[:180])
+                db.session.commit(); flash(f'Import complete: {created} created, {updated} updated.')
+            except Exception as e: db.session.rollback(); flash('Could not import file. Details: '+str(e)[:180])
             return redirect(url_for('employees'))
         if action=='create':
             eid=request.form.get('employee_id','').strip(); name=request.form.get('full_name','').strip(); sector=request.form.get('sector','').strip(); username=request.form.get('username','').strip() or eid
@@ -268,7 +294,7 @@ def budgets():
         else:
             b=SectorBudget.query.filter_by(sector=sector).first()
             if not b: b=SectorBudget(sector=sector); db.session.add(b)
-            b.monthly_amount=amount; db.session.commit(); flash('Sector monthly default saved. This is used by automatic monthly rollover.')
+            b.monthly_amount=amount; db.session.commit(); flash('Sector monthly default saved.')
         return redirect(url_for('budgets'))
     return render_template('budgets.html',title='Sector budgets',budgets=SectorBudget.query.order_by(SectorBudget.sector).all(),sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()])
 
@@ -295,7 +321,6 @@ def redeem():
     if request.method=='POST':
         raw=request.form.get('qr_data','').strip(); eid=request.form.get('employee_id','').strip(); amount=request.form.get('amount','')
         if raw:
-            # Accept legacy JSON QR codes and the specified plain-text QR payload.
             try:
                 data=json.loads(raw)
                 eid=str(data.get('employee_id','')).strip()
@@ -307,7 +332,6 @@ def redeem():
                         if key.strip().lower() in ('id', 'employee id', 'employee_id'):
                             eid=value.strip(); break
                 if not eid:
-                    # Also accept a scanner that returns just the employee ID.
                     eid=raw.strip() if '\n' not in raw and ':' not in raw else ''
                 if not eid:
                     flash('QR text must contain an ID field.'); return render_template('redeem.html',title='Redeem coupons',found=None,allocation=None)
@@ -323,7 +347,7 @@ def redeem():
                 elif value>allocation.remaining: flash(f'Insufficient balance. Remaining: {allocation.remaining} ETB.')
                 else:
                     allocation.spent+=value
-                    r=Redemption(employee_user_id=found.id,merchant_user_id=current_user.id,allocation_id=allocation.id,amount=value,reference=secrets.token_urlsafe(12)); db.session.add(r); db.session.commit(); flash(f'Redemption successful: {value} ETB. Employee balance remaining: {allocation.remaining} ETB.'); return redirect(url_for('redeem'))
+                    r=Redemption(employee_user_id=found.id,merchant_user_id=current_user.id,allocation_id=allocation.id,amount=value,reference=secrets.token_urlsafe(12)); db.session.add(r); db.session.commit(); flash(f'Redemption successful: {value} ETB. Remaining: {allocation.remaining} ETB.'); return redirect(url_for('redeem'))
     return render_template('redeem.html',title='Redeem coupons',found=found,allocation=allocation)
 
 @app.route('/admin/reports')
@@ -346,7 +370,7 @@ def users_admin():
         if role not in ('admin','authority','merchant') or not username or not name or len(password)<8: flash('Use a username, full name, valid role and password of at least 8 characters.')
         elif User.query.filter_by(username=username).first(): flash('Username already exists.')
         else:
-            u=User(username=username,role=role,full_name=name,sector=sector,must_change_password=True); u.set_password(password); db.session.add(u); db.session.commit(); flash(f'{role.title()} account created; user must change password at first login.')
+            u=User(username=username,role=role,full_name=name,sector=sector,must_change_password=True); u.set_password(password); db.session.add(u); db.session.commit(); flash(f'{role.title()} account created.')
         return redirect(url_for('users_admin'))
     users=User.query.filter(User.role.in_(['admin','authority','merchant'])).order_by(User.role,User.username).all()
     return render_template('users_admin.html',title='Operator accounts',users=users)
@@ -362,7 +386,6 @@ with app.app_context():
         u=User(username=admin_username,full_name='System Administrator',role='admin',must_change_password=True)
         u.set_password(admin_password or secrets.token_urlsafe(12)); db.session.add(u); db.session.commit()
         print('INITIAL ADMIN USERNAME:',admin_username)
-        if admin_password == 'ChangeMe123!': print('WARNING: default admin password is ChangeMe123! Change it immediately, and set ADMIN_PASSWORD in production.')
 
 scheduler=BackgroundScheduler(daemon=True)
 scheduler.add_job(monthly_rollover,'cron',hour=0,minute=10,id='ethiopian_month_rollover',replace_existing=True)
