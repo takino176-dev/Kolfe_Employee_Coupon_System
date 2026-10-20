@@ -375,6 +375,171 @@ def upload_employees():
 
     return redirect(url_for('employees'))
 
+@app.route('/admin/allocations', methods=['GET', 'POST'])
+@role_required('admin')
+def allocations():
+    info = ethiopian_info()
+    if request.method == 'POST':
+        action = request.form.get('action'); amount = request.form.get('amount', '0')
+        try: amount = int(amount)
+        except: amount = -1
+        if amount < 0: flash('Amount must be zero or greater.'); return redirect(url_for('allocations'))
+        if action == 'single':
+            u = User.query.filter_by(employee_id=request.form.get('employee_id', '').strip(), role='employee', active=True).first()
+            if not u: flash('Employee not found or inactive.')
+            else: create_allocation(u, amount, info); db.session.commit(); flash(f'Allocated {amount} ETB to {u.full_name} for {info["key"]}.')
+        elif action == 'sector':
+            sector = request.form.get('sector', '').strip()
+            if sector == 'ALL':
+                users = User.query.filter_by(role='employee', active=True).all()
+                for u in users: create_allocation(u, amount, info)
+                db.session.commit(); flash(f'Allocated {amount} ETB to all {len(users)} employees across all sectors.')
+            else:
+                users = User.query.filter_by(role='employee', sector=sector, active=True).all()
+                for u in users: create_allocation(u, amount, info)
+                db.session.commit(); flash(f'Allocated {amount} ETB to {len(users)} employees in sector {sector}.')
+        return redirect(url_for('allocations'))
+    sectors = [x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()]
+    recent = Allocation.query.filter_by(month_key=info['key']).order_by(Allocation.created_at.desc()).limit(100).all()
+    return render_template('allocations.html', title='Monthly allocations', info=info, sectors=sectors, recent=recent)
+
+@app.route('/admin/budgets', methods=['GET', 'POST'])
+@role_required('admin')
+def budgets():
+    if request.method == 'POST':
+        sector = request.form.get('sector', '').strip()
+        try: amount = int(request.form.get('amount', '0'))
+        except: amount = -1
+        if not sector or amount < 0: flash('Enter a sector and a non-negative amount.')
+        else:
+            b = SectorBudget.query.filter_by(sector=sector).first()
+            if not b: b = SectorBudget(sector=sector); db.session.add(b)
+            b.monthly_amount = amount; db.session.commit(); flash('Sector monthly default saved.')
+        return redirect(url_for('budgets'))
+    return render_template('budgets.html', title='Sector budgets', budgets=SectorBudget.query.order_by(SectorBudget.sector).all(), sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()])
+
+@app.route('/admin/print-hub')
+@role_required('admin')
+def print_hub():
+    sectors = [x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()]
+    employees = User.query.filter_by(role='employee', active=True).order_by(User.employee_id).all()
+    info = ethiopian_info()
+    default_month = f'{info["month_name"]} ወር {info["year"]} ዓ.ም'
+    return render_template('print_hub.html', title='Print Hub', sectors=sectors, employees=employees, default_month=default_month)
+
+@app.route('/admin/print')
+@role_required('admin')
+def print_coupons():
+    ids = request.args.get('ids', '').strip(); sector = request.args.get('sector', '').strip(); eid = request.args.get('employee_id', '').strip()
+    q = User.query.filter_by(role='employee', active=True)
+    if ids:
+        try: q = q.filter(User.id.in_([int(x) for x in ids.split(',') if x.strip()]))
+        except: pass
+    elif eid: q = q.filter_by(employee_id=eid)
+    elif sector: q = q.filter_by(sector=sector)
+    else: abort(400, 'Choose an employee, sector, or selected employee IDs.')
+    users = q.order_by(User.employee_id).all(); info = ethiopian_info()
+    org = request.args.get('org', 'ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል')
+    title = request.args.get('coupon_title', 'የሰራተኞች ኩፖን መጠቀሚያ'); month = request.args.get('month', f'{info["month_name"]} ወር {info["year"]} ዓ.ም')
+    val_str = request.args.get('value', '40 ብር')
+    usage_note = request.args.get('usage_note', 'ለአንድ ጊዜ አገልግሎት ብቻ የሚውል')
+    try:
+        denomination = int(''.join(filter(str.isdigit, val_str))) or 40
+    except:
+        denomination = 40
+
+    budgets = {b.sector: b.monthly_amount for b in SectorBudget.query.all()}
+    print_data = []
+    for u in users:
+        alloc = current_allocation(u)
+        allocated_amount = alloc.allocated if alloc else budgets.get(u.sector, 480)
+        coupon_count = int(allocated_amount / denomination) if denomination > 0 else 0
+        print_data.append({
+            'user': u,
+            'allocation': alloc,
+            'allocated_amount': allocated_amount,
+            'coupon_count': coupon_count
+        })
+
+    return render_template('print.html', title='Print coupons', print_data=print_data, org=org, coupon_title=title, month=month, value=val_str, usage_note=usage_note, qr_data_uri=qr_data_uri)
+
+@app.route('/admin/print-ids')
+@role_required('admin')
+def print_ids():
+    ids = request.args.get('ids', '').strip(); sector = request.args.get('sector', '').strip(); eid = request.args.get('employee_id', '').strip()
+    q = User.query.filter_by(role='employee', active=True)
+    if ids:
+        try: q = q.filter(User.id.in_([int(x) for x in ids.split(',') if x.strip()]))
+        except: pass
+    elif eid: q = q.filter_by(employee_id=eid)
+    elif sector: q = q.filter_by(sector=sector)
+    else: abort(400, 'Choose an employee, sector, or selected employee IDs.')
+    users = q.order_by(User.employee_id).all()
+    org = request.args.get('org', 'ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል')
+    return render_template('print_ids.html', title='Print Employee QR Badges', users=users, org=org, qr_data_uri=qr_data_uri)
+
+@app.route('/redeem', methods=['GET', 'POST'])
+@role_required('merchant', 'authority')
+def redeem():
+    found = None; allocation = None
+    if request.method == 'POST':
+        raw = request.form.get('qr_data', '').strip(); eid = request.form.get('employee_id', '').strip(); amount = request.form.get('amount', '')
+        if raw:
+            try:
+                data = json.loads(raw)
+                eid = str(data.get('employee_id', '')).strip()
+            except (json.JSONDecodeError, TypeError):
+                eid = ''
+                for line in raw.splitlines():
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        if key.strip().lower() in ('id', 'employee id', 'employee_id'):
+                            eid = value.strip(); break
+                if not eid:
+                    eid = raw.strip() if '\n' not in raw and ':' not in raw else ''
+                if not eid:
+                    flash('QR text must contain an ID field.'); return render_template('redeem.html', title='Redeem coupons', found=None, allocation=None)
+        found = User.query.filter_by(employee_id=eid, role='employee', active=True).first()
+        if not found: flash('Employee was not found or is inactive.')
+        else:
+            allocation = current_allocation(found)
+            if request.form.get('confirm') == 'yes':
+                try: value = int(amount)
+                except: value = 0
+                if not allocation: flash('No allocation exists for the current Ethiopian month.')
+                elif allocation.closed or value <= 0: flash('Enter a valid positive amount.')
+                elif value > allocation.remaining: flash(f'Insufficient balance. Remaining: {allocation.remaining} ETB.')
+                else:
+                    allocation.spent += value
+                    r = Redemption(employee_user_id=found.id, merchant_user_id=current_user.id, allocation_id=allocation.id, amount=value, reference=secrets.token_urlsafe(12)); db.session.add(r); db.session.commit(); flash(f'Redemption successful: {value} ETB. Remaining: {allocation.remaining} ETB.'); return redirect(url_for('redeem'))
+    return render_template('redeem.html', title='Redeem coupons', found=found, allocation=allocation)
+
+@app.route('/admin/reports')
+@role_required('admin')
+def reports():
+    info = ethiopian_info()
+    sector_rows = db.session.query(User.sector, db.func.coalesce(db.func.sum(Allocation.allocated), 0), db.func.coalesce(db.func.sum(Allocation.spent), 0)).join(Allocation, Allocation.user_id == User.id).filter(User.role == 'employee', Allocation.month_key == info['key']).group_by(User.sector).all()
+    merchants = db.session.query(User.username, User.full_name, db.func.coalesce(db.func.sum(Redemption.amount), 0)).join(Redemption, Redemption.merchant_user_id == User.id).filter(User.role.in_(['merchant', 'authority']), db.func.strftime('%Y-%m', Redemption.created_at) == datetime.utcnow().strftime('%Y-%m')).group_by(User.id).all() if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI'] else []
+    redemptions = Redemption.query.order_by(Redemption.created_at.desc()).limit(500).all()
+    if request.args.get('download') == 'csv':
+        out = io.StringIO(); w = csv.writer(out); w.writerow(['Timestamp UTC', 'Employee ID', 'Employee Name', 'Sector', 'Merchant Username', 'Amount ETB', 'Reference'])
+        for r in redemptions: w.writerow([r.created_at.isoformat(), r.employee.employee_id, r.employee.full_name, r.employee.sector, r.merchant.username, r.amount, r.reference])
+        return send_file(io.BytesIO(out.getvalue().encode('utf-8-sig')), mimetype='text/csv', as_attachment=True, download_name='coupon_redemptions.csv')
+    return render_template('reports.html', title='Reports', info=info, sector_rows=sector_rows, merchants=merchants, redemptions=redemptions)
+
+@app.route('/admin/users', methods=['GET', 'POST'])
+@role_required('admin')
+def users_admin():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip(); role = request.form.get('role', 'merchant'); name = request.form.get('full_name', '').strip(); sector = request.form.get('sector', '').strip(); password = request.form.get('password', '')
+        if role not in ('admin', 'authority', 'merchant') or not username or not name or len(password) < 8: flash('Use a username, full name, valid role and password of at least 8 characters.')
+        elif User.query.filter_by(username=username).first(): flash('Username already exists.')
+        else:
+            u = User(username=username, role=role, full_name=name, sector=sector, must_change_password=True); u.set_password(password); db.session.add(u); db.session.commit(); flash(f'{role.title()} account created.')
+        return redirect(url_for('users_admin'))
+    users = User.query.filter(User.role.in_(['admin', 'authority', 'merchant'])).order_by(User.role, User.username).all()
+    return render_template('users_admin.html', title='Operator accounts', users=users)
+
 @app.route('/health')
 def health():
     return {'status': 'ok'}
