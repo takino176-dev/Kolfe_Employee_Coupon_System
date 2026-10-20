@@ -275,14 +275,19 @@ def allocations():
             if not u: flash('Employee not found or inactive.')
             else: create_allocation(u,amount,info); db.session.commit(); flash(f'Allocated {amount} ETB to {u.full_name} for {info["key"]}.')
         elif action=='sector':
-            sector=request.form.get('sector','').strip(); users=User.query.filter_by(role='employee',sector=sector,active=True).all()
-            for u in users: create_allocation(u,amount,info)
-            db.session.commit(); flash(f'Allocated {amount} ETB to {len(users)} employees in {sector}.')
+            sector=request.form.get('sector','').strip()
+            if sector == 'ALL':
+                users=User.query.filter_by(role='employee',active=True).all()
+                for u in users: create_allocation(u,amount,info)
+                db.session.commit(); flash(f'Allocated {amount} ETB to all {len(users)} employees across all sectors.')
+            else:
+                users=User.query.filter_by(role='employee',sector=sector,active=True).all()
+                for u in users: create_allocation(u,amount,info)
+                db.session.commit(); flash(f'Allocated {amount} ETB to {len(users)} employees in sector {sector}.')
         return redirect(url_for('allocations'))
     sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()]
     recent=Allocation.query.filter_by(month_key=info['key']).order_by(Allocation.created_at.desc()).limit(100).all()
     return render_template('allocations.html',title='Monthly allocations',info=info,sectors=sectors,recent=recent)
-
 @app.route('/admin/budgets', methods=['GET','POST'])
 @role_required('admin')
 def budgets():
