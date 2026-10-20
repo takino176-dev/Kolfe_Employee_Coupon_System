@@ -269,7 +269,7 @@ def upload_employees():
         file_bytes = file.read()
 
         if filename_lower.endswith('.csv'):
-            decoded_text = None
+            decoded_text = ''
             for enc in ['utf-8-sig', 'utf-8', 'cp1252', 'latin-1']:
                 try:
                     decoded_text = file_bytes.decode(enc)
@@ -296,8 +296,6 @@ def upload_employees():
         elif filename_lower.endswith(('.xlsx', '.xls')):
             wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
             sheet = wb.active
-            
-            # Safe iteration over rows preventing openpyxl type conversion crashes
             for row in sheet.iter_rows(min_row=2, values_only=True):
                 if row and any(row):
                     val_id = row[0] if len(row) > 0 else None
@@ -316,25 +314,33 @@ def upload_employees():
             return redirect(url_for('employees'))
 
         for emp_id, full_name, sector in rows:
-            existing = User.query.filter_by(employee_id=emp_id).first()
-            if not existing:
-                username = f'emp_{emp_id}'
-                new_user = User(
-                    username=username,
-                    employee_id=emp_id,
-                    full_name=full_name,
-                    sector=sector,
-                    role='employee',
-                    must_change_password=True
-                )
-                new_user.set_password('123456')
-                db.session.add(new_user)
-                added_count += 1
+            try:
+                existing = User.query.filter_by(employee_id=emp_id).first()
+                if not existing:
+                    username = f'emp_{emp_id}'
+                    new_user = User(
+                        username=username,
+                        employee_id=emp_id,
+                        full_name=full_name,
+                        sector=sector,
+                        role='employee',
+                        must_change_password=True
+                    )
+                    new_user.set_password('123456')
+                    db.session.add(new_user)
+                    added_count += 1
+                else:
+                    # Update existing if needed
+                    existing.full_name = full_name
+                    existing.sector = sector
+            except Exception as inner_err:
+                db.session.rollback()
+                print(f"Error adding row {emp_id}: {inner_err}")
 
         db.session.commit()
         flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች ተጭነዋል!', 'success')
     except Exception as e:
-        db.session.rollback()
+        db.session.rollback
         flash(f'ፋይልን በማንበብ ጊዜ ስህተት ተፈጥሯል: {str(e)}', 'danger')
 
     return redirect(url_for('employees'))
@@ -523,4 +529,4 @@ scheduler.add_job(monthly_rollover, 'cron', hour=0, minute=10, id='ethiopian_mon
 scheduler.start()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
+   app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
