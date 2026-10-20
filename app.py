@@ -46,7 +46,8 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def set_password(self, value):
-        self.password_hash = generate_password_hash(value)
+        # Explicitly use pbkdf2:sha256 to avoid scrypt memory exhaustion / worker timeout
+        self.password_hash = generate_password_hash(value, method='pbkdf2:sha256')
         
     def check_password(self, value):
         return check_password_hash(self.password_hash, value)
