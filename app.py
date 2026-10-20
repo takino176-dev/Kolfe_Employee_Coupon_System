@@ -221,10 +221,12 @@ def upload_employees():
 
     try:
         filename_lower = file.filename.lower()
+        file_bytes = io.BytesIO(file.read())
+        
         if filename_lower.endswith('.csv'):
-            df = pd.read_csv(file)
+            df = pd.read_csv(file_bytes)
         elif filename_lower.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(file, engine='openpyxl')
+            df = pd.read_excel(file_bytes, engine='openpyxl')
         else:
             flash('እባክዎ ትክክለኛ የ CSV ወይም Excel (.xlsx) ፋይል ይምረጡ', 'danger')
             return redirect(url_for('employees'))
@@ -274,7 +276,6 @@ def upload_employees():
         flash(f'ስህተት ተፈጥሯል: {str(e)}', 'danger')
 
     return redirect(url_for('employees'))
-
 @app.route('/admin/employees')
 @role_required('admin')
 def employees():
