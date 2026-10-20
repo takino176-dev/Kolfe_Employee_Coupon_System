@@ -450,12 +450,23 @@ def health(): return {'status':'ok'}
 
 with app.app_context():
     db.create_all()
+    # Ensure missing columns in existing tables are handled safely
+    try:
+        db.session.execute(db.text('SELECT active FROM user LIMIT 1'))
+    except Exception:
+        db.session.rollback()
+        # If database schema is outdated and lacks columns, recreate tables safely
+        db.drop_all()
+        db.create_all()
+
     admin_username=os.getenv('ADMIN_USERNAME','admin')
     admin_password=os.getenv('ADMIN_PASSWORD', 'ChangeMe123!')
     if not User.query.filter_by(role='admin').first():
         u=User(username=admin_username,full_name='System Administrator',role='admin',must_change_password=True)
-        u.set_password(admin_password or secrets.token_urlsafe(12)); db.session.add(u); db.session.commit()
-        print('INITIAL ADMIN USERNAME:',admin_username)
+        u.set_password(admin_password or secrets.token_urlsafe(12))
+        db.session.add(u)
+        db.session.commit()
+        print('INITIAL ADMIN USERNAME:', admin_username)
 
 scheduler=BackgroundScheduler(daemon=True)
 scheduler.add_job(monthly_rollover,'cron',hour=0,minute=10,id='ethiopian_month_rollover',replace_existing=True)
@@ -463,3 +474,4 @@ scheduler.start()
 
 if __name__=='__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
+
