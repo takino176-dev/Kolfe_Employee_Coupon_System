@@ -1,1 +1,114 @@
-{% extends 'base.html' %}{% block body %}<div class="print-top no-print card"><h2>Print coupon sheets</h2><p>Each employee gets one A4 sheet with 24 coupons (8 rows × 3 columns). Use your browser's Print command and choose A4, scale 100%, and disable headers/footers.</p><form method="get" class="grid"><div><label>Organization header</label><input name="org" value="{{org}}"></div><div><label>Coupon title</label><input name="coupon_title" value="{{coupon_title}}"></div><div><label>Issued month/year</label><input name="month" value="{{month}}"></div><div><label>Coupon value</label><input name="value" value="{{value}}"></div><input type="hidden" name="employee_id" value="{{request.args.get('employee_id','')}}"><input type="hidden" name="sector" value="{{request.args.get('sector','')}}"><input type="hidden" name="ids" value="{{request.args.get('ids','')}}"><div><button type="submit">Apply print settings</button> <button type="button" onclick="window.print()">Print A4 sheets</button></div></form></div>{% for u in users %}<section class="coupon-page">{% for n in range(1,25) %}<div class="coupon"><img src="{{qr_data_uri(u)}}"><div class="coupon-text"><h4>{{org}}</h4><p><b>{{coupon_title}}</b></p><p>{{u.full_name}}</p><p>ID: {{u.employee_id}} · {{u.sector}}</p><p>{{month}} · <b>{{value}}</b></p><p>ቁጥር #{{'%02d'|format(n)}}</p><p>ለአንድ ጊዜ አገልግሎት ብቻ የሚውል</p></div></div>{% endfor %}</section>{% endfor %}{% endblock %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ title }}</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 10mm;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+            color: #000;
+            font-size: 11px;
+        }
+        .employee-page {
+            page-break-after: always;
+            break-after: page;
+            width: 277mm;
+            box-sizing: border-box;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 4mm;
+        }
+        .employee-info-header {
+            width: 100%;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #176b87;
+            padding-bottom: 4px;
+        }
+        .coupon-card {
+            width: 63mm;
+            height: 42mm;
+            border: 1px dashed #333;
+            padding: 4px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            font-size: 9px;
+            background: #fff;
+        }
+        .coupon-header {
+            font-weight: bold;
+            text-align: center;
+            font-size: 8px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 2px;
+        }
+        .coupon-body {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .coupon-body img {
+            width: 26mm;
+            height: 26mm;
+        }
+        .coupon-details {
+            flex-grow: 1;
+            line-height: 1.2;
+        }
+        .coupon-footer {
+            text-align: center;
+            font-size: 7.5px;
+            border-top: 1px solid #ccc;
+            padding-top: 1px;
+            font-weight: bold;
+        }
+        @media print {
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="padding: 20px; background: #f3f6f9; margin-bottom: 20px;">
+        <h2>{{ title }}</h2>
+        <p>A4 Landscape Layout. Each employee gets their own dedicated page(s) based on their approved monthly allocation.</p>
+        <button onclick="window.print()" style="padding: 10px 20px; background: #176b87; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Print A4 Sheets</button>
+    </div>
+
+    {% for data in print_data %}
+    <div class="employee-page">
+        <div class="employee-info-header no-print">
+            Employee: {{ data.user.full_name }} (ID: {{ data.user.employee_id }}) | Sector: {{ data.user.sector }} | Allocated: {{ data.allocated_amount }} ETB | Coupons: {{ data.coupon_count }}
+        </div>
+        
+        {% for i in range(1, data.coupon_count + 1) %}
+        <div class="coupon-card">
+            <div class="coupon-header">{{ org }}<br>{{ coupon_title }}</div>
+            <div class="coupon-body">
+                <img src="{{ qr_data_uri(data.user) }}" alt="QR">
+                <div class="coupon-details">
+                    <b>{{ data.user.full_name }}</b><br>
+                    ID: {{ data.user.employee_id }}<br>
+                    Sector: {{ data.user.sector }}<br>
+                    {{ month }} - {{ value }}
+                </div>
+            </div>
+            <div class="coupon-footer">
+                ቁጥር #{{ '%02d' | format(i) }} | ለአንድ ጊዜ አገልግሎት ብቻ የሚውል
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</body>
+</html>
