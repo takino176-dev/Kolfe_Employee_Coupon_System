@@ -207,60 +207,57 @@ def setup_system():
         </body>
     '''
 
-@app.route('/admin/employees', methods=['GET','POST'])
-@role_required('admin')
-def employees():
-    if request.method=='POST':
-        action=request.form.get('action')
-        if action=='import':
-            f=request.files.get('file')
-            if not f or not f.filename.lower().endswith(('.csv','.xlsx')): flash('Upload a .csv or .xlsx file.'); return redirect(url_for('employees'))
-            try:
-                if f.filename.lower().endswith('.csv'):
-                    rows=list(csv.DictReader(io.StringIO(f.stream.read().decode('utf-8-sig'))))
-                else:
-                    import pandas as pd
-                    rows=pd.read_excel(f).fillna('').to_dict(orient='records')
-                created=0; updated=0
-                for row in rows:
-                    row={str(k).strip().lower().replace(' ','_'):str(v).strip() for k,v in row.items()}
-                    eid=row.get('employee_id') or row.get('user_id') or row.get('id')
-                    name=row.get('full_name') or row.get('name')
-                    sector=row.get('sector') or row.get('department')
-                    if not eid or not name or not sector: continue
-                    u=User.query.filter_by(employee_id=eid).first()
-                    if not u:
-                        username=eid
-                        if User.query.filter_by(username=username).first(): username=eid+'_'+secrets.token_hex(2)
-                        u=User(username=username,role='employee',employee_id=eid,full_name=name,sector=sector,must_change_password=True); u.set_password(secrets.token_urlsafe(8)); db.session.add(u); created+=1
-                    else: u.full_name=name; u.sector=sector; updated+=1
-                db.session.commit(); flash(f'Import complete: {created} created, {updated} updated.')
-            except Exception as e: db.session.rollback(); flash('Could not import file. Details: '+str(e)[:180])
-            return redirect(url_for('employees'))
-        if action=='create':
-            eid=request.form.get('employee_id','').strip(); name=request.form.get('full_name','').strip(); sector=request.form.get('sector','').strip(); username=request.form.get('username','').strip() or eid
-            if not eid or not name or not sector: flash('Employee ID, full name and sector are required.')
-            elif User.query.filter((User.employee_id==eid)|(User.username==username)).first(): flash('Employee ID or username already exists.')
-            else:
-                u=User(employee_id=eid,full_name=name,sector=sector,username=username,role='employee'); temp=request.form.get('password','') or secrets.token_urlsafe(8); u.set_password(temp); db.session.add(u); db.session.commit(); flash(f'Employee created. Username: {username}; temporary password: {temp}')
-            return redirect(url_for('employees'))
-        if action=='reset':
-            u=db.session.get(User,int(request.form.get('user_id')))
-            if u:
-                temp=secrets.token_urlsafe(8); u.set_password(temp); u.must_change_password=True; db.session.commit(); flash(f'Temporary password for {u.username}: {temp}')
-            return redirect(url_for('employees'))
-        if action=='deactivate':
-            u=db.session.get(User,int(request.form.get('user_id')))
-            if u: u.active=False; db.session.commit(); flash('Account deactivated.')
-            return redirect(url_for('employees'))
-    q=request.args.get('q','').strip(); sector=request.args.get('sector','').strip()
-    query=User.query.filter_by(role='employee')
-    if q: query=query.filter(db.or_(User.employee_id.ilike(f'%{q}%'),User.full_name.ilike(f'%{q}%'),User.username.ilike(f'%{q}%')))
-    if sector: query=query.filter_by(sector=sector)
-    page=max(1,int(request.args.get('page',1))); pagination=query.order_by(User.employee_id).paginate(page=page,per_page=100,error_out=False)
-    sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()]
-    return render_template('employees.html',title='Employees',pagination=pagination,sectors=sectors,q=q,sector=sector)
+@app.route('/admin/upload_employees', methods=['POST'])
+def upload_employees():
+    file = request.files.get('file')
+    if not file or not file.filename:
+        flash('ፋይል አልተመረጠም', 'danger')
+        return redirect(url_for('employees'))
 
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+
+        # 'df' ከተነበበ በኋላ ይህ ሉፕ ከዚህ ውስጥ መሆን አለበት
+        for col in df.columns:
+            # የኮሎም ማጣሪያ ስራዎች እዚህ ይከናወናሉ
+            pass
+
+        id_col = next((c for c in df.columns if 'id' in str(c).lower()), None)
+        name_col = next((c for c in df.columns if 'name' in str(c).lower()), None)
+        sector_col = next((c for c in df.columns if 'sector' in str(c).lower() or 'department' in str(c).lower()), None)
+
+        if not id_col or not name_col:
+            flash('የሰራተኛ መለያ (ID) ወይም ስም ኮሎም አልተገኘም', 'danger')
+            return redirect(url_for('employees'))
+
+        added_count = 0
+        for _, row in df.iterrows():
+            emp_id = str(row[id_col]).strip() if pd.notna(row[id_col]) else ''
+            full_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else ''
+            sector = str(row[sector_col]).strip() if sector_col and pd.notna(row[sector_col]) else 'አጠቃላይ'
+
+            if emp_id and full_name and emp_id.lower() != 'nan':
+                existing = User.query.filter_by(employee_id=emp_id).first()
+                if not existing:
+                    new_user = User(
+                        employee_id=emp_id,
+                        full_name=full_name,
+                        sector=sector,
+                        role='employee',
+                        password_hash=generate_password_hash('123456')
+                    )
+                    db.session.add(new_user)
+                    added_count += 1
+
+        db.session.commit()
+        flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች ተጭነዋል!', 'success')
+    except Exception as e:
+        flash(f'ስህተት ተፈጥሯል: {str(e)}', 'danger')
+
+    return redirect(url_for('employees'))
 @app.route('/admin/allocations', methods=['GET','POST'])
 @role_required('admin')
 def allocations():
