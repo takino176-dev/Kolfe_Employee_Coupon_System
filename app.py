@@ -33,25 +33,25 @@ try:
 except Exception:
     ethiopian = None
 
-class User(UserMixin, db.Model):
+class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default='employee')
-    full_name = db.Column(db.String(200), nullable=False, default='')
-    employee_id = db.Column(db.String(80), unique=True, index=True)
-    sector = db.Column(db.String(150), nullable=False, default='')
-    must_change_password = db.Column(db.Boolean, default=True, nullable=False)
-    active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    def set_password(self, value):
-        # Explicitly use pbkdf2:sha256 to avoid scrypt memory exhaustion / worker timeout
-        self.password_hash = generate_password_hash(value, method='pbkdf2:sha256')
-        
-    def check_password(self, value):
-        return check_password_hash(self.password_hash, value)
+    employee_id = db.Column(db.String(50), unique=True, nullable=False)
+    full_name = db.Column(db.String(100), nullable=False)
+    sector = db.Column(db.String(100), nullable=True)
+    role = db.Column(db.String(20), nullable=False)  # 'admin', 'merchant', 'employee'
+    password_hash = db.Column(db.String(200), nullable=False)
+    must_change_password = db.Column(db.Boolean, default=False) # <--- Add this field
+# Inside your Excel/CSV upload processing block:
+hashed_default_pw = generate_password_hash('12345678')
 
+new_user = User(
+    employee_id=emp_id,
+    full_name=name,
+    sector=sector,
+    role='employee',
+    password_hash=hashed_default_pw,
+    must_change_password=True  # Forces them to change it on first login!
+)
 class Allocation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
@@ -85,78 +85,33 @@ class Redemption(db.Model):
     merchant = db.relationship('User', foreign_keys=[merchant_user_id])
     allocation = db.relationship('Allocation')
 
-@login_manager.user_loader
-def load_user(user_id):
-    return db.session.get(User, int(user_id))
-
-def role_required(*roles):
-    def deco(fn):
-        @wraps(fn)
-        @login_required
-        def wrapped(*args, **kwargs):
-            if current_user.role not in roles:
-                abort(403)
-            if current_user.must_change_password and request.endpoint not in ('change_password', 'logout', 'static'):
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        identifier = request.form.get('employee_id', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        user = User.query.filter((User.employee_id == identifier) | (User.full_name == identifier)).first()
+        
+        if user and check_password_hash(user.password_hash, password):
+            login_user(user)
+            
+            # Check if they need to change their initial password
+            if user.must_change_password:
+                flash('Please change your initial password to continue.', 'warning')
                 return redirect(url_for('change_password'))
-            return fn(*args, **kwargs)
-        return wrapped
-    return deco
-
-def ethiopian_info(d=None):
-    d = d or date.today()
-    if ethiopian:
-        ey, em, ed = ethiopian.from_gregorian(d.year, d.month, d.day)
-        names = ['መስከረም', 'ጥቅምት', 'ኅዳር', 'ታኅሳስ', 'ጥር', 'የካቲት', 'መጋቢት', 'ሚያዝያ', 'ግንቦት', 'ሰኔ', 'ሐምሌ', 'ነሐሴ', 'ጳጉሜ']
-        month_key = f'{ey:04d}-{em:02d}'
-        if em == 13:
-            ny, nm = ey + 1, 1
-        elif em == 12:
-            ny, nm = ey, 13
+                
+            # Normal routing based on role
+            if user.role == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            elif user.role == 'merchant':
+                return redirect(url_for('merchant_dashboard'))
+            else:
+                return redirect(url_for('employee_dashboard'))
         else:
-            ny, nm = ey, em + 1
-        next_g = ethiopian.to_gregorian(ny, nm, 1)
-        expiry = date(*next_g) - timedelta(days=1)
-        return {'year': ey, 'month': em, 'day': ed, 'month_name': names[em-1], 'key': month_key, 'expiry': expiry}
-    first_next = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
-    return {'year': d.year, 'month': d.month, 'day': d.day, 'month_name': d.strftime('%B'), 'key': d.strftime('%Y-%m'), 'expiry': first_next - timedelta(days=1)}
-
-def qr_data(user):
-    return f'Full Name: {user.full_name}\nID: {user.employee_id or ""}\nSector: {user.sector}'
-
-def qr_data_uri(user):
-    img = qrcode.make(qr_data(user))
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
-
-def current_allocation(user):
-    info = ethiopian_info()
-    return Allocation.query.filter_by(user_id=user.id, month_key=info['key']).first()
-
-def create_allocation(user, amount, info=None):
-    info = info or ethiopian_info()
-    existing = Allocation.query.filter_by(user_id=user.id, month_key=info['key']).first()
-    if existing:
-        existing.allocated = int(amount)
-        existing.expires_at = info['expiry']
-        existing.closed = False
-        return existing
-    obj = Allocation(user_id=user.id, month_key=info['key'], allocated=int(amount), spent=0, expires_at=info['expiry'])
-    db.session.add(obj)
-    return obj
-
-def monthly_rollover():
-    with app.app_context():
-        info = ethiopian_info()
-        Allocation.query.filter(Allocation.month_key != info['key'], Allocation.closed == False).update({'closed': True}, synchronize_session=False)
-        budgets = {b.sector: b.monthly_amount for b in SectorBudget.query.all()}
-        employees = User.query.filter_by(role='employee', active=True).all()
-        for u in employees:
-            if not Allocation.query.filter_by(user_id=u.id, month_key=info['key']).first():
-                amount = budgets.get(u.sector, 0)
-                create_allocation(u, amount, info)
-        db.session.commit()
-
+            flash('Invalid ID or Password.', 'danger')
+            
+    return render_template('login.html')
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -177,20 +132,31 @@ def logout():
 @login_required
 def change_password():
     if request.method == 'POST':
-        old = request.form.get('old_password', '')
-        new = request.form.get('new_password', '')
-        if not current_user.check_password(old):
-            flash('Current password is incorrect.')
-        elif len(new) < 8:
-            flash('New password must contain at least 8 characters.')
+        new_password = request.form.get('new_password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+        
+        if not new_password or len(new_password) < 6:
+            flash('Password must be at least 6 characters long.', 'danger')
+            return redirect(url_for('change_password'))
+            
+        if new_password != confirm_password:
+            flash('Passwords do not match.', 'danger')
+            return redirect(url_for('change_password'))
+            
+        current_user.password_hash = generate_password_hash(new_password)
+        current_user.must_change_password = False
+        db.session.commit()
+        
+        flash('Password successfully updated!', 'success')
+        
+        if current_user.role == 'admin':
+            return redirect(url_for('admin_dashboard'))
+        elif current_user.role == 'merchant':
+            return redirect(url_for('merchant_dashboard'))
         else:
-            current_user.set_password(new)
-            current_user.must_change_password = False
-            db.session.commit()
-            flash('Password changed successfully.')
-            return redirect(url_for('dashboard'))
-    return render_template('change_password.html', title='Change password')
-
+            return redirect(url_for('employee_dashboard'))
+            
+    return render_template('change_password.html')
 @app.route('/')
 @login_required
 def dashboard():
@@ -510,6 +476,36 @@ def redeem():
                     allocation.spent += value
                     r = Redemption(employee_user_id=found.id, merchant_user_id=current_user.id, allocation_id=allocation.id, amount=value, reference=secrets.token_urlsafe(12)); db.session.add(r); db.session.commit(); flash(f'Redemption successful: {value} ETB. Remaining: {allocation.remaining} ETB.'); return redirect(url_for('redeem'))
     return render_template('redeem.html', title='Redeem coupons', found=found, allocation=allocation)
+@app.route('/admin/reset-password/<int:user_id>', methods=['POST'])
+@role_required('admin')
+def reset_single_password(user_id):
+    user = User.query.get_or_404(user_id)
+    user.password_hash = generate_password_hash('12345678')
+    user.must_change_password = True
+    db.session.commit()
+    flash(f"Password for {user.full_name} has been reset to initial '12345678'.", 'success')
+    return redirect(request.referrer or url_for('admin_dashboard'))
+
+@app.route('/admin/reset-passwords-bulk', methods=['POST'])
+@role_required('admin')
+def reset_passwords_bulk():
+    target_role = request.form.get('role', 'employee') # 'employee' or 'merchant'
+    sector = request.form.get('sector', '').strip()
+    
+    query = User.query.filter_by(role=target_role)
+    if sector:
+        query = query.filter(User.sector.ilike(f"%{sector}%"))
+        
+    users = query.all()
+    default_hash = generate_password_hash('12345678')
+    
+    for u in users:
+        u.password_hash = default_hash
+        u.must_change_password = True
+        
+    db.session.commit()
+    flash(f"Successfully reset passwords for {len(users)} {target_role}(s) to '12345678'.", 'success')
+    return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/reports')
 @role_required('admin')
