@@ -288,6 +288,7 @@ def allocations():
     sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()]
     recent=Allocation.query.filter_by(month_key=info['key']).order_by(Allocation.created_at.desc()).limit(100).all()
     return render_template('allocations.html',title='Monthly allocations',info=info,sectors=sectors,recent=recent)
+
 @app.route('/admin/budgets', methods=['GET','POST'])
 @role_required('admin')
 def budgets():
@@ -303,6 +304,28 @@ def budgets():
         return redirect(url_for('budgets'))
     return render_template('budgets.html',title='Sector budgets',budgets=SectorBudget.query.order_by(SectorBudget.sector).all(),sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()])
 
+@app.route('/admin/print')
+@role_required('admin')
+def print_coupons():
+    ids=request.args.get('ids','').strip(); sector=request.args.get('sector','').strip(); eid=request.args.get('employee_id','').strip()
+    q=User.query.filter_by(role='employee',active=True)
+    if ids:
+        try: q=q.filter(User.id.in_([int(x) for x in ids.split(',') if x.strip()]))
+        except: pass
+    elif eid: q=q.filter_by(employee_id=eid)
+    elif sector: q=q.filter_by(sector=sector)
+    else: abort(400, 'Choose an employee, sector, or selected employee IDs.')
+    users=q.order_by(User.employee_id).all(); info=ethiopian_info()
+    org=request.args.get('org','ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል')
+    title=request.args.get('coupon_title','የሰራተኞች ኩፖን መጠቀሚያ'); month=request.args.get('month',f'{info["month_name"]} ወር {info["year"]} ዓ.ም'); value=request.args.get('value','40 ብር')
+    
+    try:
+        coupon_count = int(request.args.get('coupon_count', 12))
+    except:
+        coupon_count = 12
+
+    return render_template('print.html', title='Print coupons', users=users, org=org, coupon_title=title, month=month, value=value, qr_data_uri=qr_data_uri, coupon_count=coupon_count)
+
 @app.route('/admin/print-ids')
 @role_required('admin')
 def print_ids():
@@ -317,6 +340,7 @@ def print_ids():
     users=q.order_by(User.employee_id).all()
     org=request.args.get('org','ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል')
     return render_template('print_ids.html', title='Print Employee QR Badges', users=users, org=org, qr_data_uri=qr_data_uri)
+
 @app.route('/redeem', methods=['GET','POST'])
 @role_required('merchant','authority')
 def redeem():
