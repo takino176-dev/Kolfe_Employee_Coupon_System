@@ -474,7 +474,7 @@ def print_coupons():
     return render_template('print.html', title='Print Coupons', print_data=print_data, org=org, coupon_title=title, month=month, value=val_str, usage_note=usage_note, qr_data_uri=qr_data_uri)
 
 Flask
-Flask-SQLAlchemy
+
 Flask-Login
 Werkzeug
 openpyxl
