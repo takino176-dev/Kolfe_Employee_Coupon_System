@@ -1,7 +1,3 @@
-<ElicitationsGroup>
-ይቅርታ አድርጉልኝ። ከዚህ በታች ሙሉውን እና ትክክለኛውን የ `app.py` ኮድ ማስተካከያ ምንም ተጨማሪ ምልክት ሳይጨምር፣ በአንድ ሊንክ/ኮድ ብሎክ (One-Click Copy) በቀላሉ ኮፒ አድርገው እንዲጠቀሙበት አዘጋጅቼዋለሁ፦
-
-```python
 import os, io, csv, json, base64, secrets
 from datetime import datetime, date, timedelta
 from functools import wraps
@@ -460,4 +456,3 @@ scheduler.start()
 
 if __name__=='__main__':
     app.run(host='0.0.0.0',port=int(os.getenv('PORT',5000)),debug=False)
-```
