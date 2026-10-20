@@ -451,25 +451,31 @@ def print_ids():
     
     users = query.all()
     
-    # Generate inline base64 QR code data URI for each employee badge
-    def qr_data_uri(user):
+    # Prepare badge list with pre-rendered base64 QR data
+    badge_data = []
+    for user in users:
+        qr_uri = ""
         try:
-            qr = qrcode.QRCode(box_size=5, border=1)
+            qr = qrcode.QRCode(version=1, box_size=6, border=1)
             qr.add_data(f"ID:{user.employee_id}|NAME:{user.full_name}|SECTOR:{user.sector}")
             qr.make(fit=True)
             img = qr.make_image(fill_color="black", back_color="white")
             buffered = BytesIO()
             img.save(buffered, format="PNG")
-            return "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
+            qr_uri = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
         except Exception:
-            return ""
+            pass
+            
+        badge_data.append({
+            'user': user,
+            'qr_uri': qr_uri
+        })
 
     return render_template(
         'print_ids.html', 
-        users=users, 
+        badges=badge_data, 
         org=org, 
-        title="Employee ID Badges", 
-        qr_data_uri=qr_data_uri
+        title="Employee ID Badges"
     )
 @app.route('/redeem', methods=['GET', 'POST'])
 @role_required('merchant', 'authority')
