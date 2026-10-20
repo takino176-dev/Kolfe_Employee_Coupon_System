@@ -251,7 +251,7 @@ def upload_employees():
                         rows.append((emp_id, full_name, sector))
 
         elif filename_lower.endswith(('.xlsx', '.xls')):
-            wb = openpyxl.load_workbook(file, data_only=True)
+            wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
             sheet = wb.active
             iter_rows = sheet.iter_rows(values_only=True)
             first_row = next(iter_rows, None)
@@ -285,6 +285,7 @@ def upload_employees():
 
                     if emp_id and full_name and emp_id.lower() != 'nan':
                         rows.append((emp_id, full_name, sector))
+            wb.close()
         else:
             flash('እባክዎ ትክክለኛ የ CSV ወይም Excel (.xlsx) ፋይል ይምረጡ', 'danger')
             return redirect(url_for('employees'))
@@ -487,13 +488,6 @@ def health(): return {'status':'ok'}
 
 with app.app_context():
     db.create_all()
-    try:
-        db.session.execute(db.text('SELECT active FROM user LIMIT 1'))
-    except Exception:
-        db.session.rollback()
-        db.drop_all()
-        db.create_all()
-
     admin_username=os.getenv('ADMIN_USERNAME','admin')
     admin_password=os.getenv('ADMIN_PASSWORD', 'ChangeMe123!')
     if not User.query.filter_by(role='admin').first():
@@ -508,4 +502,4 @@ scheduler.add_job(monthly_rollover,'cron',hour=0,minute=10,id='ethiopian_month_r
 scheduler.start()
 
 if __name__=='__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
