@@ -1,97 +1,40 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Employee Management - Kolfe Coupon System</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #f1f5f9; color: #334155; padding: 30px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .btn { padding: 8px 16px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; }
-        .btn-danger { background: #dc2626; }
-        .btn-secondary { background: #64748b; }
-        .card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
-        th { background: #f8fafc; font-weight: 600; color: #475569; }
-        .alert { padding: 10px; border-radius: 6px; margin-bottom: 15px; background: #dcfce7; color: #166534; font-weight: 600; }
-        .controls { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
-        select { padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h2>👥 Employee Roster & Management</h2>
-        <div>
-            <a href="{{ url_for('add_employee') }}" class="btn">+ Add Employee</a>
-            <a href="{{ url_for('upload_employees') }}" class="btn" style="background:#059669;">📊 Bulk Upload</a>
-            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">← Back</a>
-        </div>
+{% extends 'base.html' %}
+{% block title %}የሰራተኞች ዝርዝር{% endblock %}
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+    <h2>የሰራተኞች ዝርዝር</h2>
+    <div>
+        <a href="{{ url_for('employee_form') }}" class="btn">+ አዲስ ሰራተኛ መዝግብ</a>
+        <a href="{{ url_for('upload') }}" class="btn btn-success">📊 ከ Excel ጫን</a>
     </div>
+</div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert">{{ message }}</div>
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>ተ/ቁ</th>
+                <th>ሙሉ ስም</th>
+                <th>ተቋም / ዘርፍ</th>
+                <th>ስልክ ቁጥር</th>
+                <th>ሁኔታ</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for emp in employees %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ emp.full_name }}</td>
+                <td>{{ emp.sector }}</td>
+                <td>{{ emp.phone or '-' }}</td>
+                <td><span style="color: green; font-weight: bold;">{{ emp.status }}</span></td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center;">ምንም የተመዘገበ ሰራተኛ የለም።</td>
+            </tr>
             {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <div class="card">
-        <form method="POST" action="{{ url_for('bulk_delete_employees') }}" id="deleteForm">
-            <div class="controls">
-                <button type="submit" class="btn btn-danger" onclick="return confirm('Delete selected employees?')">Delete Selected</button>
-                
-                <span style="color:#cbd5e1;">|</span>
-                
-                <label><strong>Delete Entire Sector:</strong></label>
-                <select name="sector_to_delete">
-                    <option value="">-- Select Sector --</option>
-                    {% for sector in sectors %}
-                        <option value="{{ sector }}">{{ sector }}</option>
-                    {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-danger" onclick="return confirm('WARNING: Delete all employees in this sector?')">Delete Sector</button>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
-                        <th>Employee ID</th>
-                        <th>Full Name (ስም)</th>
-                        <th>Sector (ዘርፍ)</th>
-                        <th>Allowance</th>
-                        <th>Balance</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for emp in employees %}
-                    <tr>
-                        <td><input type="checkbox" name="selected_ids" value="{{ emp.id }}"></td>
-                        <td><strong>{{ emp.employee_id }}</strong></td>
-                        <td>{{ emp.full_name }}</td>
-                        <td>{{ emp.sector }}</td>
-                        <td>{{ emp.monthly_allowance }} ETB</td>
-                        <td><span style="color:#059669; font-weight:bold;">{{ emp.balance }} ETB</span></td>
-                        <td>
-                            <a href="{{ url_for('print_single_card', emp_id=emp.id) }}" class="btn btn-secondary" style="font-size:12px; padding:4px 8px;">🖨️ Print Card</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </form>
-    </div>
-
-    <script>
-        function toggleSelectAll(source) {
-            checkboxes = document.getElementsByName('selected_ids');
-            for(var i=0, n=checkboxes.length;i<n;i++) {
-                checkboxes[i].checked = source.checked;
-            }
-        }
-    </script>
-</body>
-</html>
+        </tbody>
+    </table>
+</div>
+{% endblock %}

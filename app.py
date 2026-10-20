@@ -1,116 +1,104 @@
 import os
-import secrets
-import csv
-import io
-from datetime import datetime
-from flask import Flask, render_template, redirect, url_for, request, flash, session
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, redirect, url_for, flash, session
+import pandas as pd
+import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
-from functools import wraps
-from openpyxl import load_workbook
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'kolfe_secret_key_2026')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///kolfe_coupon.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = 'super_secret_key_change_in_production'
 
-db = SQLAlchemy(app)
+DB_NAME = 'coupon_system.db'
 
-# ==================== DATABASE MODELS ====================
+def get_db_connection():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-class Admin(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
+def init_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Admins / Users Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            role TEXT DEFAULT 'admin'
+        )
+    ''')
+    
+    # Employees Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS employees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            sector TEXT NOT NULL,
+            phone TEXT,
+            status TEXT DEFAULT 'Active'
+        )
+    ''')
+    
+    # Merchants Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS merchants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT,
+            location TEXT
+        )
+    ''')
 
-class Merchant(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(200), nullable=False)
+    # Allocations / Coupons Record Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS allocations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id INTEGER,
+            month TEXT NOT NULL,
+            year TEXT NOT NULL,
+            coupon_count INTEGER DEFAULT 24,
+            coupon_value REAL DEFAULT 40.0,
+            status TEXT DEFAULT 'Issued',
+            FOREIGN KEY (employee_id) REFERENCES employees (id)
+        )
+    ''')
+    
+    # Default admin creation if none exists
+    cursor.execute('SELECT * FROM users WHERE username = ?', ('admin',))
+    if not cursor.fetchone():
+        hashed_pw = generate_password_hash('admin123')
+        cursor.execute('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', ('admin', hashed_pw, 'admin'))
+        
+    conn.commit()
+    conn.close()
 
-class Employee(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.String(50), unique=True, nullable=False)
-    full_name = db.Column(db.String(150), nullable=False)
-    sector = db.Column(db.String(100), nullable=False)
-    qr_token = db.Column(db.String(100), unique=True, nullable=False, default=lambda: secrets.token_urlsafe(16))
-    monthly_allowance = db.Column(db.Float, default=1000.0)
-    balance = db.Column(db.Float, default=1000.0)
-    last_reset_date = db.Column(db.String(20), default=datetime.now().strftime('%Y-%m'))
+init_db()
 
-class RedemptionLog(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    employee_name = db.Column(db.String(150), nullable=False)
-    employee_id = db.Column(db.String(50), nullable=False)
-    merchant_name = db.Column(db.String(80), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-
-class SystemConfig(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    org_name = db.Column(db.String(150), default="Kolfe Keraniyo Sub-City Administration")
-    department = db.Column(db.String(150), default="ዲዛይንና ግንባታ ፑል (Design & Construction Pool)")
-    default_allowance = db.Column(db.Float, default=1000.0)
-    redemption_deduction = db.Column(db.Float, default=200.0)
-
-# ==================== AUTHENTICATION DECORATORS ====================
-
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if session.get('role') != 'admin':
-            session.clear()
-            flash('Access denied. Please log in with an Admin account.', 'danger')
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def merchant_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if session.get('role') != 'merchant':
-            flash('Please log in as merchant to access this page.', 'danger')
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-# ==================== ROUTES ====================
+# --- ROUTES ---
 
 @app.route('/')
 def index():
-    if session.get('role') == 'admin':
-        return redirect(url_for('admin_dashboard'))
-    elif session.get('role') == 'merchant':
-        return redirect(url_for('merchant_dashboard'))
+    if 'user' in session:
+        return redirect(url_for('admin'))
     return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '').strip()
-
-        # Hardcoded default admin fallback for instant recovery
-        if username == 'admin' and password == 'admin123':
-            session['role'] = 'admin'
-            session['username'] = 'admin'
-            return redirect(url_for('admin_dashboard'))
-
-        # Check Admin Table
-        admin = Admin.query.filter_by(username=username).first()
-        if admin and check_password_hash(admin.password_hash, password):
-            session['role'] = 'admin'
-            session['username'] = admin.username
-            return redirect(url_for('admin_dashboard'))
-
-        # Check Merchant Table
-        merchant = Merchant.query.filter_by(username=username).first()
-        if merchant and check_password_hash(merchant.password_hash, password):
-            session['role'] = 'merchant'
-            session['username'] = merchant.username
-            return redirect(url_for('merchant_dashboard'))
+        username = request.form.get('username')
+        password = request.form.get('password')
         
-        flash('Invalid username or password. Default admin: admin / admin123', 'danger')
+        conn = get_db_connection()
+        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        conn.close()
+        
+        if user and check_password_hash(user['password'], password):
+            session['user'] = user['username']
+            session['role'] = user['role']
+            return redirect(url_for('admin'))
+        else:
+            flash('የተሳሳተ የተጠቃሚ ስም ወይም የይለፍ ቃል!', 'danger')
+            
     return render_template('login.html')
 
 @app.route('/logout')
@@ -118,279 +106,143 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# --- ADMIN DASHBOARD & MANAGEMENT ---
-
 @app.route('/admin')
-@admin_required
-def admin_root():
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/admin/dashboard')
-@admin_required
-def admin_dashboard():
-    total_employees = Employee.query.count()
-    total_merchants = Merchant.query.count()
-    total_redemptions = RedemptionLog.query.count()
-    config = SystemConfig.query.first()
-    return render_template('admin.html', total_employees=total_employees, total_merchants=total_merchants, total_redemptions=total_redemptions, config=config)
-
-@app.route('/setup', methods=['GET', 'POST'])
-@admin_required
-def setup():
-    config = SystemConfig.query.first()
-    if not config:
-        config = SystemConfig()
-        db.session.add(config)
-        db.session.commit()
-
-    if request.method == 'POST':
-        config.org_name = request.form.get('org_name', config.org_name)
-        config.department = request.form.get('department', config.department)
-        config.default_allowance = float(request.form.get('default_allowance', 1000.0))
-        config.redemption_deduction = float(request.form.get('redemption_deduction', 200.0))
-        db.session.commit()
-        flash('System setup and configuration updated successfully.', 'success')
-        return redirect(url_for('admin_dashboard'))
+def admin():
+    if 'user' not in session:
+        return redirect(url_for('login'))
         
-    return render_template('setup.html', config=config)
+    conn = get_db_connection()
+    emp_count = conn.execute('SELECT COUNT(*) FROM employees').fetchone()[0]
+    alloc_count = conn.execute('SELECT COUNT(*) FROM allocations').fetchone()[0]
+    merchant_count = conn.execute('SELECT COUNT(*) FROM merchants').fetchone()[0]
+    conn.close()
+    
+    return render_template('admin.html', emp_count=emp_count, alloc_count=alloc_count, merchant_count=merchant_count)
 
 @app.route('/employees')
-@admin_required
 def employees():
-    all_employees = Employee.query.all()
-    sectors = db.session.query(Employee.sector.distinct()).all()
-    sectors = [s[0] for s in sectors if s[0]]
-    return render_template('employees.html', employees=all_employees, sectors=sectors)
+    if 'user' not in session:
+        return redirect(url_for('login'))
+        
+    conn = get_db_connection()
+    emp_list = conn.execute('SELECT * FROM employees ORDER BY id DESC').fetchall()
+    conn.close()
+    return render_template('employees.html', employees=emp_list)
 
-@app.route('/add_employee', methods=['GET', 'POST'])
-@admin_required
-def add_employee():
-    config = SystemConfig.query.first()
-    default_allowance = config.default_allowance if config else 1000.0
-
+@app.route('/employee/add', methods=['GET', 'POST'])
+def employee_form():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+        
     if request.method == 'POST':
-        emp_id = request.form.get('employee_id')
         full_name = request.form.get('full_name')
         sector = request.form.get('sector')
-        allowance = float(request.form.get('monthly_allowance', default_allowance))
-
-        if Employee.query.filter_by(employee_id=emp_id).first():
-            flash('Employee ID already exists.', 'danger')
-            return redirect(url_for('add_employee'))
-
-        new_emp = Employee(
-            employee_id=emp_id,
-            full_name=full_name,
-            sector=sector,
-            monthly_allowance=allowance,
-            balance=allowance,
-            qr_token=secrets.token_urlsafe(16)
-        )
-        db.session.add(new_emp)
-        db.session.commit()
-        flash('Employee added successfully.', 'success')
+        phone = request.form.get('phone')
+        
+        conn = get_db_connection()
+        conn.execute('INSERT INTO employees (full_name, sector, phone) VALUES (?, ?, ?)', (full_name, sector, phone))
+        conn.commit()
+        conn.close()
+        
+        flash('ሰራተኛው በትክክል ተመዝግቧል!', 'success')
         return redirect(url_for('employees'))
-    return render_template('employee_form.html', default_allowance=default_allowance)
+        
+    return render_template('employee_form.html')
 
-@app.route('/upload_employees', methods=['GET', 'POST'])
-@admin_required
-def upload_employees():
-    config = SystemConfig.query.first()
-    default_allowance = config.default_allowance if config else 1000.0
-
+@app.route('/upload', methods=['GET', 'POST'])
+def upload():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+        
     if request.method == 'POST':
         file = request.files.get('file')
-        if not file:
-            flash('No file uploaded.', 'danger')
-            return redirect(request.url)
-        try:
-            filename = file.filename.lower()
-            if filename.endswith('.xlsx'):
-                wb = load_workbook(file)
-                sheet = wb.active
-                header = [cell.value for cell in sheet[1]]
-                id_idx = header.index('employee_id') if 'employee_id' in header else 0
-                name_idx = header.index('full_name') if 'full_name' in header else 1
-                sector_idx = header.index('sector') if 'sector' in header else 2
-                allowance_idx = header.index('monthly_allowance') if 'monthly_allowance' in header else None
-
-                for row in sheet.iter_rows(min_row=2, values_only=True):
-                    if not row[id_idx]:
-                        continue
-                    emp_id = str(row[id_idx])
-                    full_name = str(row[name_idx])
-                    sector = str(row[sector_idx])
-                    allowance = float(row[allowance_idx]) if allowance_idx is not None and row[allowance_idx] is not None else default_allowance
-
-                    if not Employee.query.filter_by(employee_id=emp_id).first():
-                        new_emp = Employee(
-                            employee_id=emp_id,
-                            full_name=full_name,
-                            sector=sector,
-                            monthly_allowance=allowance,
-                            balance=allowance,
-                            qr_token=secrets.token_urlsafe(16)
-                        )
-                        db.session.add(new_emp)
-            else:
-                stream = io.TextIOWrapper(file.stream, encoding='utf-8')
-                reader = csv.DictReader(stream)
-                for row in reader:
-                    emp_id = str(row.get('employee_id'))
-                    if not emp_id:
-                        continue
-                    if not Employee.query.filter_by(employee_id=emp_id).first():
-                        new_emp = Employee(
-                            employee_id=emp_id,
-                            full_name=str(row.get('full_name')),
-                            sector=str(row.get('sector')),
-                            monthly_allowance=float(row.get('monthly_allowance', default_allowance)),
-                            balance=float(row.get('monthly_allowance', default_allowance)),
-                            qr_token=secrets.token_urlsafe(16)
-                        )
-                        db.session.add(new_emp)
-            db.session.commit()
-            flash('Employees uploaded successfully.', 'success')
+        if file and file.filename.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(file)
+            conn = get_db_connection()
+            
+            for _, row in df.iterrows():
+                name = row.get('ስም') or row.get('full_name') or row.get('Full Name')
+                sector = row.get('ዘርፍ') or row.get('ተቋም') or row.get('sector') or 'አልተገለጸም'
+                phone = row.get('ስልክ') or row.get('phone') or ''
+                
+                if name:
+                    conn.execute('INSERT INTO employees (full_name, sector, phone) VALUES (?, ?, ?)', (str(name), str(sector), str(phone)))
+            
+            conn.commit()
+            conn.close()
+            flash('የሰራተኞች መረጃ ከ Excel በትክክል ተጭኗል!', 'success')
             return redirect(url_for('employees'))
-        except Exception as e:
-            flash(f'Error processing file: {e}', 'danger')
+        else:
+            flash('እባክዎን ትክክለኛ Excel (.xlsx) ፋይል ይምረጡ!', 'danger')
+            
     return render_template('upload.html')
 
-@app.route('/bulk_delete_employees', methods=['POST'])
-@admin_required
-def bulk_delete_employees():
-    selected_ids = request.form.getlist('selected_ids')
-    sector_to_delete = request.form.get('sector_to_delete')
-
-    if sector_to_delete:
-        Employee.query.filter_by(sector=sector_to_delete).delete()
-        flash(f'All employees in sector "{sector_to_delete}" deleted.', 'success')
-    elif selected_ids:
-        Employee.query.filter(Employee.id.in_(selected_ids)).delete(synchronize_session=False)
-        flash('Selected employees deleted successfully.', 'success')
-    else:
-        flash('No employees or sector selected for deletion.', 'warning')
+@app.route('/print_cards')
+def print_cards():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+        
+    month = request.args.get('month', 'መስከረም')
+    year = request.args.get('year', '2019')
     
-    db.session.commit()
-    return redirect(url_for('employees'))
-
-@app.route('/print_single_card/<int:emp_id>')
-@admin_required
-def print_single_card(emp_id):
-    emp = Employee.query.get_or_404(emp_id)
-    config = SystemConfig.query.first()
-    return render_template('standalone_qr_print.html', employees=[emp], config=config)
-
-@app.route('/standalone_qr')
-@admin_required
-def standalone_qr():
-    all_employees = Employee.query.all()
-    config = SystemConfig.query.first()
-    return render_template('standalone_qr_print.html', employees=all_employees, config=config)
-
-# --- MERCHANT MANAGEMENT ROUTES ---
+    conn = get_db_connection()
+    employees_data = conn.execute('SELECT * FROM employees WHERE status = "Active"').fetchall()
+    sectors = [row['sector'] for row in conn.execute('SELECT DISTINCT sector FROM employees').fetchall()]
+    conn.close()
+    
+    return render_template('print_cards.html', employees=employees_data, sectors=sectors, month=month, year=year)
 
 @app.route('/merchants')
-@admin_required
 def merchants():
-    all_merchants = Merchant.query.all()
-    return render_template('merchants.html', merchants=all_merchants)
+    if 'user' not in session:
+        return redirect(url_for('login'))
+        
+    conn = get_db_connection()
+    merchants_list = conn.execute('SELECT * FROM merchants').fetchall()
+    conn.close()
+    return render_template('merchants.html', merchants=merchants_list)
 
 @app.route('/create_merchant', methods=['GET', 'POST'])
-@admin_required
 def create_merchant():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+        
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-
-        if Merchant.query.filter_by(username=username).first():
-            flash('Merchant username already exists.', 'danger')
-            return redirect(url_for('create_merchant'))
-
-        new_merchant = Merchant(
-            username=username,
-            password_hash=generate_password_hash(password)
-        )
-        db.session.add(new_merchant)
-        db.session.commit()
-        flash('Merchant created successfully.', 'success')
+        name = request.form.get('name')
+        phone = request.form.get('phone')
+        location = request.form.get('location')
+        
+        conn = get_db_connection()
+        conn.execute('INSERT INTO merchants (name, phone, location) VALUES (?, ?, ?)', (name, phone, location))
+        conn.commit()
+        conn.close()
+        
+        flash('አገልግሎት ሰጪው (Merchant) ተመዝግቧል!', 'success')
         return redirect(url_for('merchants'))
+        
     return render_template('create_merchant.html')
 
-@app.route('/reset_merchant_password/<int:merchant_id>', methods=['POST'])
-@admin_required
-def reset_merchant_password(merchant_id):
-    merchant = Merchant.query.get_or_404(merchant_id)
-    new_password = secrets.token_hex(4)
-    merchant.password_hash = generate_password_hash(new_password)
-    db.session.commit()
-    flash(f'Password reset for {merchant.username}. New temporary password: {new_password}', 'success')
-    return redirect(url_for('merchants'))
+@app.route('/allocations')
+def allocations():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+        
+    conn = get_db_connection()
+    allocs = conn.execute('''
+        SELECT a.*, e.full_name, e.sector 
+        FROM allocations a 
+        JOIN employees e ON a.employee_id = e.id 
+        ORDER BY a.id DESC
+    ''').fetchall()
+    conn.close()
+    return render_template('allocations.html', allocations=allocs)
 
-@app.route('/delete_merchant/<int:merchant_id>', methods=['POST'])
-@admin_required
-def delete_merchant(merchant_id):
-    merchant = Merchant.query.get_or_404(merchant_id)
-    db.session.delete(merchant)
-    db.session.commit()
-    flash('Merchant deleted successfully.', 'success')
-    return redirect(url_for('merchants'))
-
-# --- MERCHANT DASHBOARD (REDEMPTION) ---
-
-@app.route('/merchant/dashboard', methods=['GET', 'POST'])
-@merchant_required
-def merchant_dashboard():
-    config = SystemConfig.query.first()
-    redemption_amount = config.redemption_deduction if config else 200.0
-
-    if request.method == 'POST':
-        qr_token = request.form.get('qr_token')
-        employee = Employee.query.filter_by(qr_token=qr_token).first()
-
-        if not employee:
-            flash('Invalid QR token or employee not found.', 'danger')
-            return redirect(url_for('merchant_dashboard'))
-
-        if employee.balance < redemption_amount:
-            flash(f'Insufficient balance! Employee balance is {employee.balance} ETB.', 'danger')
-            return redirect(url_for('merchant_dashboard'))
-
-        employee.balance -= redemption_amount
-        log = RedemptionLog(
-            employee_name=employee.full_name,
-            employee_id=employee.employee_id,
-            merchant_name=session.get('username'),
-            amount=redemption_amount
-        )
-        db.session.add(log)
-        db.session.commit()
-
-        flash(f'Successfully redeemed {redemption_amount} ETB for {employee.full_name}. Remaining balance: {employee.balance} ETB', 'success')
-        return redirect(url_for('merchant_dashboard'))
-
-    return render_template('merchant.html')
-
-# ==================== INITIALIZE DATABASE & RUN ====================
-
-def init_db():
-    with app.app_context():
-        db.create_all()
-        try:
-            if not Admin.query.filter_by(username='admin').first():
-                default_admin = Admin(
-                    username='admin',
-                    password_hash=generate_password_hash('admin123')
-                )
-                db.session.add(default_admin)
-            if not SystemConfig.query.first():
-                default_config = SystemConfig()
-                db.session.add(default_config)
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-
-init_db()
+@app.route('/reports')
+def reports():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+        
+    return render_template('reports.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

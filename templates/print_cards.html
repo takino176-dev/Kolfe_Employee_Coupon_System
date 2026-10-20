@@ -2,28 +2,36 @@
 <html lang="am">
 <head>
     <meta charset="UTF-8">
-    <title>የኩፖን ማተሚያ ገፅ</title>
-    <script src="[https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js](https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js)"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>የሰራተኞች ኩፖን መጠቀሚያ ኩፖን</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; padding: 15px; color: #000000; }
+        * { 
+            box-sizing: border-box; 
+            margin: 0; 
+            padding: 0; 
+            font-family: 'Ethiopic Fancy', 'Nyala', 'Kobera', 'Abyssinica SIL', 'Segoe UI', sans-serif; 
+        }
 
-        .control-panel {
+        body { 
+            background-color: #f1f5f9; 
+            padding: 20px; 
+        }
+
+        /* ማጣሪያ እና ማተሚያ ቁልፍ (ከፕሪንት ውጭ) */
+        .no-print {
             background: #ffffff;
-            padding: 18px 24px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.08);
-            max-width: 950px;
+            padding: 15px 20px;
+            border-radius: 10px;
+            max-width: 1000px;
             margin: 0 auto 20px auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             display: flex;
-            gap: 20px;
+            gap: 15px;
             align-items: center;
             justify-content: space-between;
         }
 
-        .control-group { display: flex; flex-direction: column; gap: 4px; }
-        .control-group label { font-size: 13px; font-weight: bold; color: #475569; }
-        .control-group input {
+        .no-print select {
             padding: 8px 12px;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
@@ -31,204 +39,181 @@
         }
 
         .btn {
-            padding: 10px 20px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: bold;
+            padding: 9px 18px;
+            background: #2563eb;
             color: #fff;
             border: none;
+            border-radius: 6px;
             cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
+            font-weight: bold;
+            font-size: 14px;
         }
-        .btn-blue { background: #2563eb; }
-        .btn-dark { background: #475569; }
 
-        .employee-page {
-            width: 100%;
-            margin-bottom: 30px;
+        .btn:hover {
+            background: #1d4ed8;
+        }
+
+        /* ገጽ (A4 Page for Single Employee) */
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            padding: 8mm;
+            margin: 0 auto 20mm auto;
+            background: #ffffff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            page-break-after: always;
             page-break-inside: avoid;
         }
 
-        @media print {
-            .employee-page {
-                page-break-before: always !important;
-                break-before: page !important;
-                margin-bottom: 0 !important;
-            }
-            .employee-page:first-child {
-                page-break-before: auto !important;
-                break-before: auto !important;
-            }
-        }
-
-        .print-grid {
+        /* የኩፖኖች ድርድር (3 በአግድም X 8 በቁመት = 24 ኩፖን በገጽ) */
+        .coupon-grid {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 6px;
-            width: 100%;
-            margin: 0 auto;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4mm;
         }
 
-        .coupon-card {
-            background: #ffffff;
-            border: 1.5px solid #000000;
-            border-radius: 3px;
-            padding: 5px 6px;
+        /* የነጠላ ኩፖን ሳጥን ዲዛይን */
+        .coupon-box {
+            border: 2px solid #334155;
+            border-radius: 6px;
+            padding: 6px;
             text-align: center;
-            font-size: 9px;
+            background: #fff;
+            height: 33mm;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            height: 155px;
-            box-sizing: border-box;
-            page-break-inside: avoid;
+        }
+
+        .header-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #0f172a;
             line-height: 1.2;
         }
 
-        .header-title { font-size: 9px; font-weight: bold; }
-        .dept-title { font-size: 8px; font-weight: bold; }
-        .coupon-title { font-size: 8px; font-weight: bold; margin-bottom: 1px; }
+        .sub-title {
+            font-size: 10px;
+            font-weight: bold;
+            color: #1e293b;
+            margin-top: 2px;
+        }
 
-        .info-block {
-            text-align: left;
-            font-size: 7.5px;
+        .emp-name {
+            font-size: 11px;
+            font-weight: bold;
+            color: #0f172a;
             margin: 2px 0;
-            line-height: 1.2;
+            border-bottom: 1px dashed #cbd5e1;
+            padding-bottom: 2px;
         }
 
-        .qr-box {
+        .institution {
+            font-size: 9.5px;
+            color: #334155;
+        }
+
+        .notice {
+            font-size: 9px;
+            color: #475569;
+            margin-top: 1px;
+        }
+
+        .footer-info {
+            font-size: 9.5px;
+            font-weight: bold;
+            color: #0f172a;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 2px 0;
+            justify-content: space-between;
+            margin-top: 2px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 2px;
         }
 
-        .validity-note { font-size: 7px; font-weight: bold; margin: 1px 0; }
-        .month-note { font-size: 7px; font-weight: bold; margin-bottom: 1px; }
-        .price-tag { font-size: 8.5px; font-weight: bold; border-top: 1px solid #000; padding-top: 2px; margin-top: 1px; }
-
+        /* ለማተሚያ የሚሆን ስታይል (Print Rules) */
         @media print {
             @page {
-                size: A4 landscape;
+                size: A4;
                 margin: 5mm;
             }
-            body { background: none; padding: 0; }
-            .no-print { display: none !important; }
-            .print-grid {
-                grid-template-columns: repeat(6, 1fr);
-                gap: 4px;
+            body { 
+                background: #fff; 
+                padding: 0; 
             }
-            .coupon-card {
+            .no-print { 
+                display: none !important; 
+            }
+            .a4-page {
                 box-shadow: none;
-                border: 1.5px solid #000;
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                page-break-after: always;
+                page-break-inside: avoid;
             }
         }
     </style>
 </head>
 <body>
 
-    <div class="control-panel no-print">
-        <div class="control-group">
-            <label for="monthInput">🗓️ ወር ያስገቡ:</label>
-            <input type="text" id="monthInput" value="የጥቅምት ወር 2019 ዓ.ም" oninput="generateCards()" style="width: 220px;">
-        </div>
-
-        <div class="control-group">
-            <label for="countInput">📄 የኩፖን ብዛት (ከ 1 እስከ 22):</label>
-            <input type="number" id="countInput" value="22" min="1" max="22" oninput="generateCards()" style="width: 140px;">
-        </div>
-
+    <!-- ማጣሪያ እና ማተሚያ ቁልፍ -->
+    <div class="no-print">
+        <h3>🎟️ የኩፖን ማተሚያ ገጽ</h3>
         <div>
-            <button onclick="window.print()" class="btn btn-blue">🖨️ አትም (Print)</button>
-            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-dark" style="margin-left: 8px;">ተመለስ</a>
+            <label for="sectorFilter">በዘርፍ/ተቋም አጣራ: </label>
+            <select id="sectorFilter" onchange="filterCoupons()">
+                <option value="ALL">ሁሉንም ዘርፎች</option>
+                {% for sector in sectors %}
+                <option value="{{ sector }}">{{ sector }}</option>
+                {% endfor %}
+            </select>
         </div>
+        <button class="btn" onclick="window.print()">🖨️ ኩፖኖቹን አትም (Print)</button>
     </div>
 
-    <div id="printContainer"></div>
+    <!-- እያንዳንዱ ሰራተኛ የራሱ ገጽ (A4 Page Per Employee) አለው -->
+    {% for emp in employees %}
+    <div class="a4-page employee-page" data-sector="{{ emp.sector }}">
+        <div class="coupon-grid">
+            <!-- በአንድ ገጽ ላይ 24 ኩፖኖችን ድገም -->
+            {% for i in range(24) %}
+            <div class="coupon-box">
+                <div>
+                    <div class="header-title">ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር<br>ዲዛይንና ግንባታ ፑል</div>
+                    <div class="sub-title">የሰራተኞች ኩፖን መጠቀሚያ ኩፖን</div>
+                </div>
+                
+                <div class="emp-name">{{ emp.full_name }}</div>
+                
+                <div class="institution">የሚሰራበት ተቋም: {{ emp.sector }}</div>
+                
+                <div class="notice">ለአንድ ጊዜ አገልግሎት የሚውል</div>
+                
+                <div class="footer-info">
+                    <span>ለ {{ month or 'መስከረም' }} ወር {{ year or '2019' }} ዓ.ም ብቻ</span>
+                    <span>የኩፖን ዋጋ 40 ብር</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
 
     <script>
-        const rawEmployees = [
-            {% for emp in employees %}
-            {
-                id: "{{ emp.id }}",
-                employee_id: "{{ emp.employee_id }}",
-                full_name: "{{ emp.full_name }}",
-                sector: "{{ emp.sector }}",
-                qr_token: "{{ emp.qr_token }}"
-            }{% if not loop.last %},{% endif %}
-            {% endfor %}
-        ];
+        function filterCoupons() {
+            var selectedSector = document.getElementById('sectorFilter').value.toLowerCase();
+            var pages = document.querySelectorAll('.employee-page');
 
-        function generateCards() {
-            const container = document.getElementById('printContainer');
-            container.innerHTML = '';
-            
-            let couponCount = parseInt(document.getElementById('countInput').value) || 1;
-            if (couponCount > 22) couponCount = 22;
-            if (couponCount < 1) couponCount = 1;
-
-            const selectedMonth = document.getElementById('monthInput').value || 'የጥቅምት ወር 2019 ዓ.ም';
-
-            let globalCardCounter = 0;
-
-            rawEmployees.forEach(emp => {
-                const pageDiv = document.createElement('div');
-                pageDiv.className = 'employee-page';
-
-                const gridDiv = document.createElement('div');
-                gridDiv.className = 'print-grid';
-
-                const qrPayload = `ስም: ${emp.full_name}\nመታወቂያ: ${emp.employee_id}\nዘርፍ: ${emp.sector}\nቶከን: ${emp.qr_token}`;
-
-                for (let i = 0; i < couponCount; i++) {
-                    globalCardCounter++;
-                    const cardDiv = document.createElement('div');
-                    cardDiv.className = 'coupon-card';
-                    const qrId = `qrcode-${emp.id}-${globalCardCounter}`;
-
-                    cardDiv.innerHTML = `
-                        <div>
-                            <div class="header-title">በኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር</div>
-                            <div class="dept-title">ዲዛይንና ግንባታ ፑል</div>
-                            <div class="coupon-title">የሰራተኞች የህብ መስተንግዶ ኩፖን</div>
-                        </div>
-
-                        <div class="info-block">
-                            <div><strong>የሰራተኛው ስም:</strong> ${emp.full_name}</div>
-                            <div><strong>የሚሰሩበት ተቋም:</strong> ${emp.sector || 'የከተማ ውበትና አረንጓዴ ልማት ጽ/ቤት'}</div>
-                        </div>
-
-                        <div class="qr-box">
-                            <div id="${qrId}"></div>
-                        </div>
-
-                        <div>
-                            <div class="validity-note">ለአንድ ጊዜ አገልግሎት ብቻ የሚውል</div>
-                            <div class="month-note">ለአገልግሎቱ በወጣው ${selectedMonth} ብቻ የሚያገለግል</div>
-                            <div class="price-tag">የኩፖኑ ዋጋ 40 ብር</div>
-                        </div>
-                    `;
-
-                    gridDiv.appendChild(cardDiv);
-
-                    setTimeout(() => {
-                        new QRCode(document.getElementById(qrId), {
-                            text: qrPayload,
-                            width: 38,
-                            height: 38
-                        });
-                    }, 10);
+            pages.forEach(function(page) {
+                var sector = page.getAttribute('data-sector').toLowerCase();
+                if (selectedSector === 'all' || sector === selectedSector) {
+                    page.style.display = "block";
+                } else {
+                    page.style.display = "none";
                 }
-
-                pageDiv.appendChild(gridDiv);
-                container.appendChild(pageDiv);
             });
         }
-
-        window.onload = function() {
-            generateCards();
-        };
     </script>
 </body>
 </html>

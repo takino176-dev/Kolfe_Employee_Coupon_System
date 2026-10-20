@@ -1,41 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Bulk Upload - Kolfe Coupon System</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #f1f5f9; color: #334155; padding: 30px; display: flex; justify-content: center; }
-        .card { background: #fff; padding: 30px; border-radius: 12px; width: 100%; max-width: 500px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #475569; }
-        input[type="file"] { width: 100%; padding: 10px; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f8fafc; }
-        .btn { width: 100%; padding: 10px; background: #059669; color: #fff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
-        .btn-secondary { background: #64748b; margin-top: 10px; display: inline-block; text-align: center; text-decoration: none; width: 100%; padding: 10px; border-radius: 6px; color: white; font-weight: 600; }
-        .alert { padding: 10px; border-radius: 6px; margin-bottom: 15px; background: #fee2e2; color: #991b1b; font-size: 12px; font-weight: 600; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2 style="margin-bottom: 10px;">📊 Bulk Employee Upload</h2>
-        <p style="font-size:12px; color:#64748b; margin-bottom:20px;">Upload an Excel (<code>.xlsx</code>) or CSV file with headers: <code>employee_id</code>, <code>full_name</code>, <code>sector</code>, <code>monthly_allowance</code></p>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <form method="POST" enctype="multipart/form-data">
-            <div class="form-group">
-                <label>Select Spreadsheet File</label>
-                <input type="file" name="file" accept=".xlsx, .csv" required>
-            </div>
-            <button type="submit" class="btn">Upload & Import Employees</button>
-            <a href="{{ url_for('employees') }}" class="btn-secondary">Cancel</a>
-        </form>
-    </div>
-</body>
-</html>
+{% extends 'base.html' %}
+{% block title %}Excel ፋይል መጫኛ{% endblock %}
+{% block content %}
+<h2>ከ Excel የሰራተኞች መረጃ መጫኛ</h2>
+<div class="card" style="max-width: 500px;">
+    <form method="POST" enctype="multipart/form-data">
+        <div style="margin-bottom: 15px;">
+            <label>የ Excel ፋይል ይምረጡ (.xlsx):</label><br><br>
+            <input type="file" name="file" accept=".xlsx, .xls" required>
+        </div>
+        <button type="submit" class="btn btn-success">መረጃውን ጫን</button>
+    </form>
+</div>
+{% endblock %}

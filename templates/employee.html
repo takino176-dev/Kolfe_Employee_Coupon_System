@@ -1,65 +1,44 @@
-{% extends "base.html" %}{% block content %}<div class="row"><div><h1>{{ e.full_name }}</h1><p class="muted">ID {{ e.employee_id }} · {{ e.sector }}</p></div><form method="get"><label>Month</label><input type="month" name="month" value="{{ month }}"><button>View</button></form></div><div class="grid"><div class="stat"><small>Allocated</small><strong>{{ "%.2f"|format(allocated) }}</strong></div><div class="stat"><small>Spent</small><strong>{{ "%.2f"|format(spent) }}</strong></div><div class="stat"><small>Remaining</small><strong>{{ "%.2f"|format(remaining) }}</strong></div></div><div class="panel"><h2>Permanent QR code</h2><img class="qr" src="{{ url_for('qr_image',token=e.qr_token) }}"><p class="muted">This QR stays the same each month.</p></div><div class="panel table-wrap"><h2>Payment history</h2><table><tr><th>Date UTC</th><th>Reference</th><th>Amount</th></tr>{% for t in txs %}<tr><td>{{ t.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ t.reference }}</td><td>{{ "%.2f"|format(t.amount) }}</td></tr>{% else %}<tr><td colspan="3">No payments this month.</td></tr>{% endfor %}</table></div>{% endblock %}
-
-<div style="font-family: sans-serif; text-align: left; font-size: 14px;">
-    <p><strong>የሰራተኛው ስም:</strong> {{ emp.full_name }}</p>
-    <p><strong>መለያ ቁጥር:</strong> {{ emp.employee_id }}</p>
-    <p><strong>ዘርፍ:</strong> {{ emp.sector }}</p>
-</div>
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="am">
 <head>
     <meta charset="UTF-8">
-    <title>Employee QR Card</title>
+    <title>የሰራተኛ ገጽ - ኮልፌ ቀራኒዮ</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #fff;
-            margin: 0;
-            padding: 20px;
-        }
-        .qr-card {
-            border: 2px dashed #333;
-            padding: 20px;
-            width: 300px;
-            text-align: center;
-            margin: 10px auto;
-            background: #fff;
-        }
-        .qr-card img {
-            width: 180px;
-            height: 180px;
-        }
-        .info {
-            margin-top: 15px;
-            text-align: left;
-            font-size: 15px;
-            line-height: 1.8;
-        }
-        /* Automatically open print dialog when page loads */
-        @media print {
-            body { padding: 0; }
-            .no-print { display: none; }
-        }
+        body { font-family: 'Segoe UI', sans-serif; background: #f1f5f9; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .stat { padding: 15px; border-radius: 8px; color: white; text-align: center; }
+        .bal { background: #0284c7; }
+        .spent { background: #e11d48; }
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="card">
+            <h2>👋 እንኳን ደህና መጡ, {{ emp.full_name }}</h2>
+            <p><strong>መታወቂያ:</strong> {{ emp.employee_id }} | <strong>ዘርፍ:</strong> {{ emp.sector }}</p>
+        </div>
 
-    <div class="qr-card">
-        <!-- QR Code Image -->
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ emp.qr_token }}" alt="QR Code">
-        
-        <!-- Employee Details (Only Full Name, ID, Sector) -->
-        <div class="info">
-            <p><strong>የሰራተኛው ስም:</strong> {{ emp.full_name }}</p>
-            <p><strong>መለያ ቁጥር:</strong> {{ emp.employee_id }}</p>
-            <p><strong>ዘርፍ:</strong> {{ emp.sector }}</p>
+        <div class="grid">
+            <div class="stat bal">
+                <h3>የቀረ ባላንስ</h3>
+                <h2>{{ emp.current_balance }} ETB</h2>
+            </div>
+            <div class="stat spent">
+                <h3>ወጪ የተደረገ</h3>
+                <h2>{{ total_spent }} ETB</h2>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+            <h3>📜 የክፍያ ታሪክ</h3>
+            <ul>
+                {% for log in logs %}
+                <li>{{ log.timestamp.strftime('%Y-%m-%d') }} - <strong>{{ log.amount_deducted }} ETB</strong> ወጪ ተደርጓል::</li>
+                {% endfor %}
+            </ul>
         </div>
     </div>
-
-    <div style="text-align: center; margin-top: 20px;" class="no-print">
-        <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">Print Card</button>
-    </div>
-
 </body>
 </html>
