@@ -1,6 +1,11 @@
+<ElicitationsGroup>
+ይቅርታ አድርጉልኝ። ከዚህ በታች ሙሉውን እና ትክክለኛውን የ `app.py` ኮድ ማስተካከያ ምንም ተጨማሪ ምልክት ሳይጨምር፣ በአንድ ሊንክ/ኮድ ብሎክ (One-Click Copy) በቀላሉ ኮፒ አድርገው እንዲጠቀሙበት አዘጋጅቼዋለሁ፦
+
+```python
 import os, io, csv, json, base64, secrets
 from datetime import datetime, date, timedelta
 from functools import wraps
+import pandas as pd
 from flask import Flask, request, redirect, url_for, flash, render_template, session, send_file, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -29,7 +34,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default='employee') # admin, authority, merchant, employee
+    role = db.Column(db.String(20), nullable=False, default='employee')
     full_name = db.Column(db.String(200), nullable=False, default='')
     employee_id = db.Column(db.String(80), unique=True, index=True)
     sector = db.Column(db.String(150), nullable=False, default='')
@@ -43,7 +48,7 @@ class Allocation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     month_key = db.Column(db.String(20), nullable=False, index=True)
-    allocated = db.Column(db.Integer, nullable=False, default=0) # ETB whole numbers
+    allocated = db.Column(db.Integer, nullable=False, default=0)
     spent = db.Column(db.Integer, nullable=False, default=0)
     expires_at = db.Column(db.Date, nullable=False)
     closed = db.Column(db.Boolean, default=False, nullable=False)
@@ -208,6 +213,7 @@ def setup_system():
     '''
 
 @app.route('/admin/upload_employees', methods=['POST'])
+@role_required('admin')
 def upload_employees():
     file = request.files.get('file')
     if not file or not file.filename:
@@ -220,14 +226,18 @@ def upload_employees():
         else:
             df = pd.read_excel(file)
 
-        # 'df' ከተነበበ በኋላ ይህ ሉፕ ከዚህ ውስጥ መሆን አለበት
-        for col in df.columns:
-            # የኮሎም ማጣሪያ ስራዎች እዚህ ይከናወናሉ
-            pass
+        id_col = None
+        name_col = None
+        sector_col = None
 
-        id_col = next((c for c in df.columns if 'id' in str(c).lower()), None)
-        name_col = next((c for c in df.columns if 'name' in str(c).lower()), None)
-        sector_col = next((c for c in df.columns if 'sector' in str(c).lower() or 'department' in str(c).lower()), None)
+        for col in df.columns:
+            col_clean = str(col).strip().lower()
+            if 'id' in col_clean and not id_col:
+                id_col = col
+            elif 'name' in col_clean and not name_col:
+                name_col = col
+            elif ('sector' in col_clean or 'department' in col_clean) and not sector_col:
+                sector_col = col
 
         if not id_col or not name_col:
             flash('የሰራተኛ መለያ (ID) ወይም ስም ኮሎም አልተገኘም', 'danger')
@@ -242,13 +252,16 @@ def upload_employees():
             if emp_id and full_name and emp_id.lower() != 'nan':
                 existing = User.query.filter_by(employee_id=emp_id).first()
                 if not existing:
+                    username = f'emp_{emp_id}'
                     new_user = User(
+                        username=username,
                         employee_id=emp_id,
                         full_name=full_name,
                         sector=sector,
                         role='employee',
-                        password_hash=generate_password_hash('123456')
+                        must_change_password=True
                     )
+                    new_user.set_password('123456')
                     db.session.add(new_user)
                     added_count += 1
 
@@ -258,6 +271,13 @@ def upload_employees():
         flash(f'ስህተት ተፈጥሯል: {str(e)}', 'danger')
 
     return redirect(url_for('employees'))
+
+@app.route('/admin/employees')
+@role_required('admin')
+def employees():
+    employees = User.query.filter_by(role='employee', active=True).order_by(User.employee_id).all()
+    return render_template('employees.html', title='Employees', employees=employees)
+
 @app.route('/admin/allocations', methods=['GET','POST'])
 @role_required('admin')
 def allocations():
@@ -438,13 +458,6 @@ scheduler=BackgroundScheduler(daemon=True)
 scheduler.add_job(monthly_rollover,'cron',hour=0,minute=10,id='ethiopian_month_rollover',replace_existing=True)
 scheduler.start()
 
-if __name__=='__main__': app.run(host='0.0.0.0',port=int(os.getenv('PORT',5000)),debug=False)
-# Updated column detection for your Excel sheet
-for col in df.columns:
-    col_clean = str(col).strip().lower()
-    if 'id' in col_clean:
-        id_col = col
-    elif 'name' in col_clean:
-        name_col = col
-    elif 'sector' in col_clean or 'department' in col_clean:
-        sector_col = col
+if __name__=='__main__':
+    app.run(host='0.0.0.0',port=int(os.getenv('PORT',5000)),debug=False)
+```
