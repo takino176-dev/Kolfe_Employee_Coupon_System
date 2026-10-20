@@ -1,103 +1,96 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>{{ title }}</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #f3f6f9; margin: 0; padding: 40px; color: #333; }
-        .container { max-width: 850px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h2 { color: #176b87; border-bottom: 2px solid #176b87; padding-bottom: 10px; }
-        .section { margin-top: 25px; padding: 20px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; }
-        label { display: block; font-weight: bold; margin-top: 10px; margin-bottom: 5px; font-size: 13px; }
-        input, select { width: 100%; padding: 9px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { background: #176b87; color: #fff; border: none; padding: 12px 20px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; font-size: 14px; }
-        button:hover { background: #0f4c5c; }
-        .row { display: flex; gap: 15px; }
-        .col { flex: 1; }
-        .divider { text-align: center; margin: 10px 0; font-weight: bold; color: #777; font-size: 12px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>🖨️ Kolfe Print Hub (Admin Control Panel)</h2>
-        <p>Choose your printing mode below. Each employee's pages are strictly isolated (one person per page layout).</p>
+{% extends 'base.html' %}
+{% block body %}
+<style>
+    .print-hub-container { max-width: 850px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .print-hub-container h2 { color: #176b87; border-bottom: 2px solid #176b87; padding-bottom: 10px; }
+    .print-hub-container .section { margin-top: 25px; padding: 20px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; }
+    .print-hub-container label { display: block; font-weight: bold; margin-top: 10px; margin-bottom: 5px; font-size: 13px; }
+    .print-hub-container input, .print-hub-container select { width: 100%; padding: 9px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    .print-hub-container button { background: #176b87; color: #fff; border: none; padding: 12px 20px; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; font-size: 14px; }
+    .print-hub-container button:hover { background: #0f4c5c; }
+    .print-hub-container .row { display: flex; gap: 15px; }
+    .print-hub-container .col { flex: 1; }
+</style>
 
-        <!-- SECTION 1: MONTHLY COUPONS -->
-        <div class="section">
-            <h3>1. Print Monthly Coupons (A4 Landscape)</h3>
-            <p style="font-size: 12px; color: #555;">Configure monthly pool, denomination, and choose to print for a single employee or an entire sector in bulk.</p>
-            
-            <form action="{{ url_for('print_coupons') }}" method="get" target="_blank">
-                <div class="row">
-                    <div class="col">
-                        <label>Option A: Bulk Print by Sector</label>
-                        <select name="sector">
-                            <option value="">-- Select Sector --</option>
-                            {% for s in sectors %}
-                            <option value="{{ s }}">{{ s }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col">
-                        <label>Option B: Single Print by Employee ID</label>
-                        <input type="text" name="employee_id" placeholder="e.g. emp-001">
-                    </div>
-                </div>
+<div class="print-hub-container">
+    <h2>🖨️ Kolfe Print Hub (Admin Control Panel)</h2>
+    <p>Choose your printing mode below. Each employee's pages are strictly isolated (one person per page layout).</p>
 
-                <label>Organization Title (የድርጅት ርዕስ):</label>
-                <input type="text" name="org" value="ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል">
-
-                <label>Coupon Title (የኩፖን ርዕስ):</label>
-                <input type="text" name="coupon_title" value="የሰራተኞች ኩፖን መጠቀሚያ">
-
-                <div class="row">
-                    <div class="col">
-                        <label>Coupon Denomination / Value (የኩፖን ዋጋ):</label>
-                        <input type="text" name="value" value="40 ብር">
-                    </div>
-                    <div class="col">
-                        <label>Issue Month & Year (ወርና ዓመት):</label>
-                        <input type="text" name="month" value="{{ default_month }}">
-                    </div>
-                </div>
-
-                <label>Usage Note (የአጠቃቀም ማስታወሻ):</label>
-                <input type="text" name="usage_note" value="ለአንድ ጊዜ አገልግሎት ብቻ የሚውል">
-
-                <button type="submit">Generate & Print Coupons</button>
-            </form>
-        </div>
-
-        <!-- SECTION 2: PERMANENT QR ID BADGES -->
-        <div class="section" style="margin-top: 30px;">
-            <h3>2. Print Permanent QR Identity Badges</h3>
-            <p style="font-size: 12px; color: #555;">Contains only Full Name, ID, and Sector with permanent QR identity. No balances or expiry dates.</p>
-            
-            <form action="{{ url_for('print_ids') }}" method="get" target="_blank">
-                <div class="row">
-                    <div class="col">
-                        <label>Option A: Bulk Print by Sector</label>
-                        <select name="sector">
-                            <option value="">-- Select Sector --</option>
-                            {% for s in sectors %}
-                            <option value="{{ s }}">{{ s }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col">
-                        <label>Option B: Single Print by Employee ID</label>
-                        <input type="text" name="employee_id" placeholder="e.g. emp-001">
-                    </div>
-                </div>
-
-                <label>Organization Header:</label>
-                <input type="text" name="org" value="ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል">
-
-                <button type="submit" style="background: #2b7a78;">Generate & Print QR Badges</button>
-            </form>
-        </div>
+    <!-- SECTION 1: MONTHLY COUPONS -->
+    <div class="section">
+        <h3>1. Print Monthly Coupons (A4 Landscape)</h3>
+        <p style="font-size: 12px; color: #555;">Configure monthly pool, denomination, and choose to print for a single employee or an entire sector in bulk.</p>
         
-        <p style="margin-top: 20px; text-align: center;"><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+        <form action="{{ url_for('print_coupons') }}" method="get" target="_blank">
+            <div class="row">
+                <div class="col">
+                    <label>Option A: Bulk Print by Sector</label>
+                    <select name="sector">
+                        <option value="">-- Select Sector --</option>
+                        {% for s in sectors %}
+                        <option value="{{ s }}">{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col">
+                    <label>Option B: Single Print by Employee ID</label>
+                    <input type="text" name="employee_id" placeholder="e.g. emp-001">
+                </div>
+            </div>
+
+            <label>Organization Title (የድርጅት ርዕስ):</label>
+            <input type="text" name="org" value="ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል">
+
+            <label>Coupon Title (የኩፖን ርዕስ):</label>
+            <input type="text" name="coupon_title" value="የሰራተኞች ኩፖን መጠቀሚያ">
+
+            <div class="row">
+                <div class="col">
+                    <label>Coupon Denomination / Value (የኩፖን ዋጋ):</label>
+                    <input type="text" name="value" value="40 ብር">
+                </div>
+                <div class="col">
+                    <label>Issue Month & Year (ወርና ዓመት):</label>
+                    <input type="text" name="month" value="{{ default_month }}">
+                </div>
+            </div>
+
+            <label>Usage Note (የአጠቃቀም ማስታወሻ):</label>
+            <input type="text" name="usage_note" value="ለአንድ ጊዜ አገልግሎት ብቻ የሚውል">
+
+            <button type="submit">Generate & Print Coupons</button>
+        </form>
     </div>
-</body>
-</html>
+
+    <!-- SECTION 2: PERMANENT QR ID BADGES -->
+    <div class="section" style="margin-top: 30px;">
+        <h3>2. Print Permanent QR Identity Badges</h3>
+        <p style="font-size: 12px; color: #555;">Contains only Full Name, ID, and Sector with permanent QR identity. No balances or expiry dates.</p>
+        
+        <form action="{{ url_for('print_ids') }}" method="get" target="_blank">
+            <div class="row">
+                <div class="col">
+                    <label>Option A: Bulk Print by Sector</label>
+                    <select name="sector">
+                        <option value="">-- Select Sector --</option>
+                        {% for s in sectors %}
+                        <option value="{{ s }}">{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col">
+                    <label>Option B: Single Print by Employee ID</label>
+                    <input type="text" name="employee_id" placeholder="e.g. emp-001">
+                </div>
+            </div>
+
+            <label>Organization Header:</label>
+            <input type="text" name="org" value="ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል">
+
+            <button type="submit" style="background: #2b7a78;">Generate & Print QR Badges</button>
+        </form>
+    </div>
+    
+    <p style="margin-top: 20px; text-align: center;"><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+</div>
+{% endblock %}
