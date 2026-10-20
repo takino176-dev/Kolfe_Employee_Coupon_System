@@ -224,7 +224,11 @@ def upload_employees():
         file_bytes = io.BytesIO(file.read())
         
         if filename_lower.endswith('.csv'):
-            df = pd.read_csv(file_bytes)
+            try:
+                df = pd.read_csv(file_bytes)
+            except Exception:
+                file_bytes.seek(0)
+                df = pd.read_csv(file_bytes, encoding='latin-1')
         elif filename_lower.endswith(('.xlsx', '.xls')):
             df = pd.read_excel(file_bytes, engine='openpyxl')
         else:
@@ -273,9 +277,10 @@ def upload_employees():
         db.session.commit()
         flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች ተጭነዋል!', 'success')
     except Exception as e:
-        flash(f'ስህተት ተፈጥሯል: {str(e)}', 'danger')
+        flash(f' ፋይልን በማንበብ ጊዜ ስህተት ተፈጥሯል: {str(e)}', 'danger')
 
     return redirect(url_for('employees'))
+
 @app.route('/admin/employees')
 @role_required('admin')
 def employees():
@@ -451,12 +456,10 @@ def health(): return {'status':'ok'}
 
 with app.app_context():
     db.create_all()
-    # Ensure missing columns in existing tables are handled safely
     try:
         db.session.execute(db.text('SELECT active FROM user LIMIT 1'))
     except Exception:
         db.session.rollback()
-        # If database schema is outdated and lacks columns, recreate tables safely
         db.drop_all()
         db.create_all()
 
@@ -475,4 +478,3 @@ scheduler.start()
 
 if __name__=='__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
-
