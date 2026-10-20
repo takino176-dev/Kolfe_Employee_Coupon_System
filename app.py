@@ -225,7 +225,6 @@ def upload_employees():
         rows = []
 
         if filename_lower.endswith('.csv'):
-            # Explicitly force utf-8-sig encoding to properly support Amharic text
             stream = io.TextIOWrapper(file.stream, encoding='utf-8-sig', errors='ignore')
             reader = csv.reader(stream)
             headers = [str(h).strip().lower() for h in next(reader, [])]
@@ -308,7 +307,7 @@ def upload_employees():
                 added_count += 1
 
         db.session.commit()
-        flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች በአማርኛ ስም ተጭነዋል!', 'success')
+        flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች ተጭነዋል!', 'success')
     except Exception as e:
         flash(f'ፋይልን በማንበብ ጊዜ ስህተት ተፈጥሯል: {str(e)}', 'danger')
 
@@ -504,4 +503,3 @@ scheduler.start()
 
 if __name__=='__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
-```
