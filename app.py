@@ -642,5 +642,4 @@ scheduler = BackgroundScheduler(daemon=True)
 scheduler.add_job(monthly_rollover, 'cron', hour=0, minute=10, id='ethiopian_month_rollover', replace_existing=True)
 scheduler.start()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
+if __name__ == '__main__':`n    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
