@@ -451,20 +451,18 @@ def print_ids():
     
     users = query.all()
     
-    # Prepare badge list with pre-rendered base64 QR data
     badge_data = []
     for user in users:
         qr_uri = ""
         try:
-            qr = qrcode.QRCode(version=1, box_size=6, border=1)
-            qr.add_data(f"ID:{user.employee_id}|NAME:{user.full_name}|SECTOR:{user.sector}")
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
+            # Simple string payload for maximum scanner compatibility
+            payload = str(user.employee_id)
+            img = qrcode.make(payload)
             buffered = BytesIO()
             img.save(buffered, format="PNG")
             qr_uri = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"QR Gen Error for {user.employee_id}: {e}")
             
         badge_data.append({
             'user': user,
