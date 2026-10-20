@@ -220,10 +220,14 @@ def upload_employees():
         return redirect(url_for('employees'))
 
     try:
-        if file.filename.endswith('.csv'):
+        filename_lower = file.filename.lower()
+        if filename_lower.endswith('.csv'):
             df = pd.read_csv(file)
+        elif filename_lower.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(file, engine='openpyxl')
         else:
-            df = pd.read_excel(file)
+            flash('እባክዎ ትክክለኛ የ CSV ወይም Excel (.xlsx) ፋይል ይምረጡ', 'danger')
+            return redirect(url_for('employees'))
 
         id_col = None
         name_col = None
@@ -458,4 +462,4 @@ scheduler.add_job(monthly_rollover,'cron',hour=0,minute=10,id='ethiopian_month_r
 scheduler.start()
 
 if __name__=='__main__':
-    app.run(host='0.0.0.0',port=int(os.getenv('PORT',5000)),debug=False)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
