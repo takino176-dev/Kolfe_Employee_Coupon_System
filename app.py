@@ -1,4 +1,4 @@
-import os, io, csv, json, base64, secrets
+app_py_content = """import os, io, csv, json, base64, secrets
 from datetime import datetime, date, timedelta
 from functools import wraps
 import openpyxl
@@ -102,7 +102,7 @@ def ethiopian_info(d=None):
     return {'year':d.year,'month':d.month,'day':d.day,'month_name':d.strftime('%B'),'key':d.strftime('%Y-%m'),'expiry':first_next-timedelta(days=1)}
 
 def qr_data(user):
-    return f'Full Name: {user.full_name}\nID: {user.employee_id or ""}\nSector: {user.sector}'
+    return f'Full Name: {user.full_name}\\nID: {user.employee_id or ""}\\nSector: {user.sector}'
 
 def qr_data_uri(user):
     img = qrcode.make(qr_data(user)); buf=io.BytesIO(); img.save(buf, format='PNG')
@@ -253,13 +253,12 @@ def upload_employees():
                 elif ('name' in h or 'ስም' in h) and name_idx == -1: name_idx = i
                 elif ('sector' in h or 'department' in h or 'መስሪያ' in h or 'ክፍል' in h) and sector_idx == -1: sector_idx = i
 
-            # Fallback if headers are not recognized or first row is data
             start_row_idx = 1
             if id_idx == -1 or name_idx == -1:
                 id_idx = 0
                 name_idx = 1
                 sector_idx = 2 if len(header_row) > 2 else -1
-                start_row_idx = 0 # First row is data
+                start_row_idx = 0
 
             for row in reader[start_row_idx:]:
                 if row and len(row) > max(id_idx, name_idx):
@@ -328,7 +327,7 @@ def upload_employees():
                 added_count += 1
 
         db.session.commit()
-        flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች በአማርኛ ስም ተጭነዋል!', 'success')
+        flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች ተጭነዋል!', 'success')
     except Exception as e:
         flash(f'ፋይልን በማንበብ ጊዜ ስህተት ተፈጥሯል: {str(e)}', 'danger')
 
@@ -461,7 +460,7 @@ def redeem():
                         if key.strip().lower() in ('id', 'employee id', 'employee_id'):
                             eid=value.strip(); break
                 if not eid:
-                    eid=raw.strip() if '\n' not in raw and ':' not in raw else ''
+                    eid=raw.strip() if '\\n' not in raw and ':' not in raw else ''
                 if not eid:
                     flash('QR text must contain an ID field.'); return render_template('redeem.html',title='Redeem coupons',found=None,allocation=None)
         found=User.query.filter_by(employee_id=eid,role='employee',active=True).first()
@@ -524,4 +523,9 @@ scheduler.start()
 
 if __name__=='__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
-```
+"""
+
+with open('app.py', 'w', encoding='utf-8') as f:
+    f.write(app_py_content)
+
+print("Generated clean app.py successfully!")
