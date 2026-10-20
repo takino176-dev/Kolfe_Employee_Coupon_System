@@ -208,9 +208,12 @@ def setup_system():
         </body>
     '''
 
-@app.route('/admin/upload_employees', methods=['POST'])
+@app.route('/admin/upload_employees', methods=['GET', 'POST'])
 @role_required('admin')
 def upload_employees():
+    if request.method == 'GET':
+        return redirect(url_for('employees'))
+        
     file = request.files.get('file')
     if not file or not file.filename:
         flash('ፋይል አልተመረጠም', 'danger')
