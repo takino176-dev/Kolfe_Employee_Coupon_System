@@ -304,6 +304,15 @@ def budgets():
         return redirect(url_for('budgets'))
     return render_template('budgets.html',title='Sector budgets',budgets=SectorBudget.query.order_by(SectorBudget.sector).all(),sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()])
 
+@app.route('/admin/print-hub')
+@role_required('admin')
+def print_hub():
+    sectors=[x[0] for x in db.session.query(User.sector).filter_by(role='employee').distinct().order_by(User.sector).all()]
+    employees=User.query.filter_by(role='employee', active=True).order_by(User.employee_id).all()
+    info=ethiopian_info()
+    default_month=f'{info["month_name"]} ወር {info["year"]} ዓ.ም'
+    return render_template('print_hub.html', title='Print Hub', sectors=sectors, employees=employees, default_month=default_month)
+
 @app.route('/admin/print')
 @role_required('admin')
 def print_coupons():
@@ -318,16 +327,18 @@ def print_coupons():
     users=q.order_by(User.employee_id).all(); info=ethiopian_info()
     org=request.args.get('org','ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል')
     title=request.args.get('coupon_title','የሰራተኞች ኩፖን መጠቀሚያ'); month=request.args.get('month',f'{info["month_name"]} ወር {info["year"]} ዓ.ም')
-    val_str=request.args.get('value','40')
+    val_str=request.args.get('value','40 ብር')
+    usage_note=request.args.get('usage_note','ለአንድ ጊዜ አገልግሎት ብቻ የሚውል')
     try:
         denomination = int(''.join(filter(str.isdigit, val_str))) or 40
     except:
         denomination = 40
 
+    budgets={b.sector:b.monthly_amount for b in SectorBudget.query.all()}
     print_data = []
     for u in users:
         alloc = current_allocation(u)
-        allocated_amount = alloc.allocated if alloc else 0
+        allocated_amount = alloc.allocated if alloc else budgets.get(u.sector, 480)
         coupon_count = int(allocated_amount / denomination) if denomination > 0 else 0
         print_data.append({
             'user': u,
@@ -336,7 +347,7 @@ def print_coupons():
             'coupon_count': coupon_count
         })
 
-    return render_template('print.html', title='Print coupons', print_data=print_data, org=org, coupon_title=title, month=month, value=val_str, qr_data_uri=qr_data_uri)
+    return render_template('print.html', title='Print coupons', print_data=print_data, org=org, coupon_title=title, month=month, value=val_str, usage_note=usage_note, qr_data_uri=qr_data_uri)
 
 @app.route('/admin/print-ids')
 @role_required('admin')
