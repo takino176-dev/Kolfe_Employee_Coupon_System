@@ -439,20 +439,14 @@ def print_ids():
         query = query.filter(User.employee_id.ilike(f"%{employee_id}%"))
     
     users = query.all()
-    
     badge_data = []
+    
     for user in users:
         qr_uri = ""
         try:
-            # QR koodiin kan hojjetamu haala dhaabbataa (Permanent) ta'een lakkoofsa eenyummaa hojjetaa (employee_id) qofa irratti hundaa'udhaan ta'a.
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_L,
-                box_size=6,
-                border=1,
-            )
-            payload = str(user.employee_id) if user.employee_id else "UNKNOWN"
-            qr.add_data(payload)
+            # Permanent QR based strictly on employee_id
+            qr = qrcode.QRCode(version=1, box_size=6, border=1)
+            qr.add_data(str(user.employee_id) if user.employee_id else "UNKNOWN")
             qr.make(fit=True)
             
             img = qr.make_image(fill_color="black", back_color="white")
@@ -460,19 +454,11 @@ def print_ids():
             img.save(buffered, format="PNG")
             qr_uri = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode('utf-8')
         except Exception as e:
-            print(f"QR Generation Error for {user.employee_id}: {e}")
+            print(f"QR Error: {e}")
             
-        badge_data.append({
-            'user': user,
-            'qr_uri': qr_uri
-        })
+        badge_data.append({'user': user, 'qr_uri': qr_uri})
 
-    return render_template(
-        'print_ids.html', 
-        badges=badge_data, 
-        org=org, 
-        title="የሰራተኛ መታወቂያ / Employee ID Card"
-    )
+    return render_template('print_ids.html', badges=badge_data, org=org, title="የሰራተኛ መታወቂያ / Employee ID Card")
 @app.route('/admin/print')
 @role_required('admin')
 def print_coupons():
@@ -642,4 +628,5 @@ scheduler = BackgroundScheduler(daemon=True)
 scheduler.add_job(monthly_rollover, 'cron', hour=0, minute=10, id='ethiopian_month_rollover', replace_existing=True)
 scheduler.start()
 
-if __name__ == '__main__':`n    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
