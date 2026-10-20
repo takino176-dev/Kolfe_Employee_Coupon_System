@@ -57,6 +57,7 @@
             display: flex;
             gap: 5px;
             align-items: center;
+            justify-content: center;
         }
         .coupon-body img {
             width: 26mm;
@@ -64,7 +65,8 @@
         }
         .coupon-details {
             flex-grow: 1;
-            line-height: 1.2;
+            line-height: 1.3;
+            text-align: left;
         }
         .coupon-footer {
             text-align: center;
@@ -79,10 +81,10 @@
     </style>
 </head>
 <body>
-    <div class="no-print" style="padding: 20px; background: #f3f6f9; margin-bottom: 20px;">
+    <div class="no-print" style="padding: 20px; background: #f3f6f9; margin-bottom: 20px; text-align: center;">
         <h2>{{ title }}</h2>
-        <p>A4 Landscape Layout. Each employee gets their own dedicated page(s) based on their approved monthly allocation.</p>
-        <button onclick="window.print()" style="padding: 10px 20px; background: #176b87; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Print A4 Sheets</button>
+        <p>A4 Landscape Layout. One employee per page. Coupons strictly exclude employee name and ID text per instructions.</p>
+        <button onclick="window.print()" style="padding: 10px 25px; background: #176b87; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;">Print A4 Sheets</button>
     </div>
 
     {% for data in print_data %}
@@ -97,14 +99,12 @@
             <div class="coupon-body">
                 <img src="{{ qr_data_uri(data.user) }}" alt="QR">
                 <div class="coupon-details">
-                    <b>{{ data.user.full_name }}</b><br>
-                    ID: {{ data.user.employee_id }}<br>
-                    Sector: {{ data.user.sector }}<br>
-                    {{ month }} - {{ value }}
+                    <b>ዋጋ፦ {{ value }}</b><br>
+                    ወር፦ {{ month }}
                 </div>
             </div>
             <div class="coupon-footer">
-                ቁጥር #{{ '%02d' | format(i) }} | ለአንድ ጊዜ አገልግሎት ብቻ የሚውል
+                {{ usage_note }}
             </div>
         </div>
         {% endfor %}
