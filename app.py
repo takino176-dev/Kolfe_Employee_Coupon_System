@@ -225,6 +225,7 @@ def upload_employees():
         rows = []
 
         if filename_lower.endswith('.csv'):
+            # Explicitly force utf-8-sig encoding to properly support Amharic text
             stream = io.TextIOWrapper(file.stream, encoding='utf-8-sig', errors='ignore')
             reader = csv.reader(stream)
             headers = [str(h).strip().lower() for h in next(reader, [])]
@@ -246,7 +247,7 @@ def upload_employees():
                 if len(row) > max(id_idx, name_idx):
                     emp_id = row[id_idx].strip()
                     full_name = row[name_idx].strip()
-                    sector = row[sector_idx].strip() if sector_idx != -1 and len(row) > sector_idx else 'አጠቃላይ'
+                    sector = row[sector_idx].strip() if sector_idx != -1 and len(row) > sector_idx else 'ከተማ ውበት'
                     if emp_id and full_name and emp_id.lower() != 'nan':
                         rows.append((emp_id, full_name, sector))
 
@@ -277,11 +278,11 @@ def upload_employees():
                 if row and len(row) > max(id_idx, name_idx):
                     val_id = row[id_idx]
                     val_name = row[name_idx]
-                    val_sector = row[sector_idx] if sector_idx != -1 and len(row) > sector_idx else 'አጠቃላይ'
+                    val_sector = row[sector_idx] if sector_idx != -1 and len(row) > sector_idx else 'ከተማ ውበት'
                     
                     emp_id = str(val_id).strip() if val_id is not None else ''
                     full_name = str(val_name).strip() if val_name is not None else ''
-                    sector = str(val_sector).strip() if val_sector is not None else 'አጠቃላይ'
+                    sector = str(val_sector).strip() if val_sector is not None else 'ከተማ ውበት'
 
                     if emp_id and full_name and emp_id.lower() != 'nan':
                         rows.append((emp_id, full_name, sector))
@@ -307,7 +308,7 @@ def upload_employees():
                 added_count += 1
 
         db.session.commit()
-        flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች ተጭነዋል!', 'success')
+        flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች በአማርኛ ስም ተጭነዋል!', 'success')
     except Exception as e:
         flash(f'ፋይልን በማንበብ ጊዜ ስህተት ተፈጥሯል: {str(e)}', 'danger')
 
@@ -503,3 +504,4 @@ scheduler.start()
 
 if __name__=='__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False)
+```
