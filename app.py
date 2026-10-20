@@ -317,14 +317,26 @@ def print_coupons():
     else: abort(400, 'Choose an employee, sector, or selected employee IDs.')
     users=q.order_by(User.employee_id).all(); info=ethiopian_info()
     org=request.args.get('org','ኮልፌ ቀራኒዮ ክፍለ ከተማ አስተዳደር - ዲዛይንና ግንባታ ፑል')
-    title=request.args.get('coupon_title','የሰራተኞች ኩፖን መጠቀሚያ'); month=request.args.get('month',f'{info["month_name"]} ወር {info["year"]} ዓ.ም'); value=request.args.get('value','40 ብር')
-    
+    title=request.args.get('coupon_title','የሰራተኞች ኩፖን መጠቀሚያ'); month=request.args.get('month',f'{info["month_name"]} ወር {info["year"]} ዓ.ም')
+    val_str=request.args.get('value','40')
     try:
-        coupon_count = int(request.args.get('coupon_count', 12))
+        denomination = int(''.join(filter(str.isdigit, val_str))) or 40
     except:
-        coupon_count = 12
+        denomination = 40
 
-    return render_template('print.html', title='Print coupons', users=users, org=org, coupon_title=title, month=month, value=value, qr_data_uri=qr_data_uri, coupon_count=coupon_count)
+    print_data = []
+    for u in users:
+        alloc = current_allocation(u)
+        allocated_amount = alloc.allocated if alloc else 0
+        coupon_count = int(allocated_amount / denomination) if denomination > 0 else 0
+        print_data.append({
+            'user': u,
+            'allocation': alloc,
+            'allocated_amount': allocated_amount,
+            'coupon_count': coupon_count
+        })
+
+    return render_template('print.html', title='Print coupons', print_data=print_data, org=org, coupon_title=title, month=month, value=val_str, qr_data_uri=qr_data_uri)
 
 @app.route('/admin/print-ids')
 @role_required('admin')
