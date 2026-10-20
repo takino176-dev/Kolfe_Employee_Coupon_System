@@ -4,7 +4,6 @@ Flask-Login==0.6.3
 gunicorn==23.0.0
 qrcode[pil]==8.2
 Pillow==11.3.0
-pandas==2.3.1
 openpyxl==3.1.5
 APScheduler==3.11.0
 convertdate==2.4.0

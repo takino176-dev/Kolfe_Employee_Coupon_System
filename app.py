@@ -1,7 +1,7 @@
 import os, io, csv, json, base64, secrets
 from datetime import datetime, date, timedelta
 from functools import wraps
-import pandas as pd
+import openpyxl
 from flask import Flask, request, redirect, url_for, flash, render_template, session, send_file, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -221,63 +221,94 @@ def upload_employees():
 
     try:
         filename_lower = file.filename.lower()
-        file_bytes = io.BytesIO(file.read())
-        
+        added_count = 0
+        rows = []
+
         if filename_lower.endswith('.csv'):
-            try:
-                df = pd.read_csv(file_bytes)
-            except Exception:
-                file_bytes.seek(0)
-                df = pd.read_csv(file_bytes, encoding='latin-1')
+            stream = io.TextIOWrapper(file.stream, encoding='utf-8-sig', errors='ignore')
+            reader = csv.reader(stream)
+            headers = [str(h).strip().lower() for h in next(reader, [])]
+            
+            id_idx = -1
+            name_idx = -1
+            sector_idx = -1
+            
+            for i, h in enumerate(headers):
+                if 'id' in h and id_idx == -1: id_idx = i
+                elif 'name' in h and name_idx == -1: name_idx = i
+                elif ('sector' in h or 'department' in h) and sector_idx == -1: sector_idx = i
+
+            if id_idx == -1 or name_idx == -1:
+                flash('የሰራተኛ መለያ (ID) ወይም ስም ኮሎም አልተገኘም', 'danger')
+                return redirect(url_for('employees'))
+
+            for row in reader:
+                if len(row) > max(id_idx, name_idx):
+                    emp_id = row[id_idx].strip()
+                    full_name = row[name_idx].strip()
+                    sector = row[sector_idx].strip() if sector_idx != -1 and len(row) > sector_idx else 'አጠቃላይ'
+                    if emp_id and full_name and emp_id.lower() != 'nan':
+                        rows.append((emp_id, full_name, sector))
+
         elif filename_lower.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(file_bytes, engine='openpyxl')
+            wb = openpyxl.load_workbook(file, data_only=True)
+            sheet = wb.active
+            iter_rows = sheet.iter_rows(values_only=True)
+            first_row = next(iter_rows, None)
+            if not first_row:
+                flash('ባዶ ፋይል ነው', 'danger')
+                return redirect(url_for('employees'))
+
+            headers = [str(h).strip().lower() if h is not None else '' for h in first_row]
+            id_idx = -1
+            name_idx = -1
+            sector_idx = -1
+
+            for i, h in enumerate(headers):
+                if 'id' in h and id_idx == -1: id_idx = i
+                elif 'name' in h and name_idx == -1: name_idx = i
+                elif ('sector' in h or 'department' in h) and sector_idx == -1: sector_idx = i
+
+            if id_idx == -1 or name_idx == -1:
+                flash('የሰራተኛ መለያ (ID) ወይም ስም ኮሎም አልተገኘም', 'danger')
+                return redirect(url_for('employees'))
+
+            for row in iter_rows:
+                if row and len(row) > max(id_idx, name_idx):
+                    val_id = row[id_idx]
+                    val_name = row[name_idx]
+                    val_sector = row[sector_idx] if sector_idx != -1 and len(row) > sector_idx else 'አጠቃላይ'
+                    
+                    emp_id = str(val_id).strip() if val_id is not None else ''
+                    full_name = str(val_name).strip() if val_name is not None else ''
+                    sector = str(val_sector).strip() if val_sector is not None else 'አጠቃላይ'
+
+                    if emp_id and full_name and emp_id.lower() != 'nan':
+                        rows.append((emp_id, full_name, sector))
         else:
             flash('እባክዎ ትክክለኛ የ CSV ወይም Excel (.xlsx) ፋይል ይምረጡ', 'danger')
             return redirect(url_for('employees'))
 
-        id_col = None
-        name_col = None
-        sector_col = None
-
-        for col in df.columns:
-            col_clean = str(col).strip().lower()
-            if 'id' in col_clean and not id_col:
-                id_col = col
-            elif 'name' in col_clean and not name_col:
-                name_col = col
-            elif ('sector' in col_clean or 'department' in col_clean) and not sector_col:
-                sector_col = col
-
-        if not id_col or not name_col:
-            flash('የሰራተኛ መለያ (ID) ወይም ስም ኮሎም አልተገኘም', 'danger')
-            return redirect(url_for('employees'))
-
-        added_count = 0
-        for _, row in df.iterrows():
-            emp_id = str(row[id_col]).strip() if pd.notna(row[id_col]) else ''
-            full_name = str(row[name_col]).strip() if pd.notna(row[name_col]) else ''
-            sector = str(row[sector_col]).strip() if sector_col and pd.notna(row[sector_col]) else 'አጠቃላይ'
-
-            if emp_id and full_name and emp_id.lower() != 'nan':
-                existing = User.query.filter_by(employee_id=emp_id).first()
-                if not existing:
-                    username = f'emp_{emp_id}'
-                    new_user = User(
-                        username=username,
-                        employee_id=emp_id,
-                        full_name=full_name,
-                        sector=sector,
-                        role='employee',
-                        must_change_password=True
-                    )
-                    new_user.set_password('123456')
-                    db.session.add(new_user)
-                    added_count += 1
+        for emp_id, full_name, sector in rows:
+            existing = User.query.filter_by(employee_id=emp_id).first()
+            if not existing:
+                username = f'emp_{emp_id}'
+                new_user = User(
+                    username=username,
+                    employee_id=emp_id,
+                    full_name=full_name,
+                    sector=sector,
+                    role='employee',
+                    must_change_password=True
+                )
+                new_user.set_password('123456')
+                db.session.add(new_user)
+                added_count += 1
 
         db.session.commit()
         flash(f'በተሳካ ሁኔታ {added_count} ሰራተኞች ተጭነዋል!', 'success')
     except Exception as e:
-        flash(f' ፋይልን በማንበብ ጊዜ ስህተት ተፈጥሯል: {str(e)}', 'danger')
+        flash(f'ፋይልን በማንበብ ጊዜ ስህተት ተፈጥሯል: {str(e)}', 'danger')
 
     return redirect(url_for('employees'))
 
